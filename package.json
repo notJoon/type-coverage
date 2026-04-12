@@ -1,0 +1,44 @@
+{
+	"name": "type-coverage",
+	"version": "0.1.0",
+	"description": "Type-level branch coverage for TypeScript conditional types",
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"bin": {
+		"type-coverage": "dist/cli.js"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"format": "biome format --write .",
+		"typecheck": "tsc --noEmit",
+		"test": "node --test dist/**/*.test.js",
+		"check-deps": "node scripts/check-deps.js",
+		"ci": "pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run test && pnpm run check-deps"
+	},
+	"keywords": [
+		"typescript",
+		"type-coverage",
+		"conditional-types",
+		"static-analysis"
+	],
+	"author": "",
+	"license": "ISC",
+	"packageManager": "pnpm@10.13.1",
+	"dependencies": {},
+	"peerDependencies": {
+		"typescript": ">=5.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.11",
+		"typescript": "^6.0.2"
+	}
+}
