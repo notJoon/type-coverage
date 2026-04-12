@@ -33,12 +33,12 @@
 	"author": "",
 	"license": "ISC",
 	"packageManager": "pnpm@10.13.1",
-	"dependencies": {},
 	"peerDependencies": {
 		"typescript": ">=5.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.11",
+		"@types/node": "^25.6.0",
 		"typescript": "^6.0.2"
 	}
 }
