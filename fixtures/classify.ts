@@ -1,5 +1,4 @@
-// Fixture: a 2-branch classifier fully covered by 3 tests.
-// Expected coverage: 4/4 directions, 0 unknown.
+// A 2-branch classifier fully covered by 3 tests.
 
 export type Classify<X> =
 	X extends string
@@ -11,3 +10,10 @@ export type Classify<X> =
 export type _s = Classify<"hi">;
 export type _n = Classify<42>;
 export type _b = Classify<true>;
+
+// Expected:
+//   target: Classify
+//   tests: 3
+//   branches: 2
+//   coverage: 4/4
+//   unknown: 0

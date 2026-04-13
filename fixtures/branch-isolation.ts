@@ -1,6 +1,5 @@
-// Fixture: both tests take the root TRUE branch. The root FALSE subtree's
-// inner conditional must stay unreached (no entry in counts map).
-// Expected: root TRUE=2, inner-true TRUE=2, inner-false subtree unreached.
+// Both tests take the root TRUE branch. The root FALSE subtree's inner
+// conditional must stay unreached (no entry in counts map).
 
 export type T<X> =
 	X extends "yes"
@@ -13,3 +12,10 @@ export type T<X> =
 
 export type _t1 = T<"yes">;
 export type _t2 = T<"yes">;
+
+// Expected:
+//   target: T
+//   tests: 2
+//   branches: 3
+//   coverage: 2/6
+//   unknown: 0

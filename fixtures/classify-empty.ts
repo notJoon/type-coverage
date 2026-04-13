@@ -1,5 +1,4 @@
-// Fixture: same Classify type as classify.ts but with no test aliases.
-// Expected: 0 tests, 0/4 covered, counts map empty.
+// Same Classify type as classify.ts but with no test aliases.
 
 export type Classify<X> =
 	X extends string
@@ -7,3 +6,10 @@ export type Classify<X> =
 		: X extends number
 			? "n"
 			: "other";
+
+// Expected:
+//   target: Classify
+//   tests: 0
+//   branches: 2
+//   coverage: 0/4
+//   unknown: 0

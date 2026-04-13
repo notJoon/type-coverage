@@ -1,6 +1,5 @@
-// Fixture: unknown at a middle level must stop the chain. The deepest
-// conditional below the unknown must remain unreached in counts.
-// Expected: outer TRUE hit, middle unknown, deepest never reached.
+// Unknown at a middle level must stop the chain. The deepest conditional
+// below the unknown must remain unreached in counts.
 
 type Box<T> = { v: T };
 
@@ -14,3 +13,10 @@ export type T<X> =
 		: "skip";
 
 export type _t1 = T<"go">;
+
+// Expected:
+//   target: T
+//   tests: 1
+//   branches: 3
+//   coverage: 1/6
+//   unknown: 1

@@ -5,6 +5,8 @@ import { type BranchPoint, collectBranches } from "./scanner.js";
 import { parseTestAssertions, type TestAssertion } from "./test-parser.js";
 import { type TraceResult, traceConditionalChain } from "./tracer.js";
 
+export type { BranchPoint, TestAssertion, TraceResult };
+
 export interface FixtureRunResult {
 	sourceFile: ts.SourceFile;
 	branches: BranchPoint[];
