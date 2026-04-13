@@ -29,10 +29,10 @@ describe("fixture: classify.ts", () => {
 	});
 });
 
-describe("fixture: nested-drill.ts", () => {
+describe("fixture: pyramid.ts", () => {
 	it("walks all 4 levels TRUE for a single test", () => {
 		const { branches, traces, counts } = runFixture(
-			path.join(FIXTURES, "nested-drill.ts"),
+			path.join(FIXTURES, "pyramid.ts"),
 			"Deep",
 		);
 

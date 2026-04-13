@@ -12,12 +12,18 @@ export interface RenderOptions {
 	color?: boolean;
 	/** Visual width of a tab character in the rendered output. Default: 2. */
 	tabWidth?: number;
+	/**
+	 * Whether to display hit counts next to T/F markers. Default: "auto".
+	 * - "auto" — show counts only if any branch was hit more than once
+	 *   (boolean-like coverage stays compact as ✓/✗)
+	 * - "always" — always show `(N)` after T/F
+	 * - "never" — never show numbers
+	 */
+	showCounts?: "auto" | "always" | "never";
 }
 
-type Colorize = (
-	color: Parameters<typeof styleText>[0],
-	text: string,
-) => string;
+type StyleFormat = Parameters<typeof styleText>[0];
+type Colorize = (color: StyleFormat, text: string) => string;
 
 function makeColorize(color: boolean): Colorize {
 	if (!color) {
@@ -26,30 +32,83 @@ function makeColorize(color: boolean): Colorize {
 	return (c, text) => styleText(c, text, { validateStream: false });
 }
 
-function formatMarker(
+// Visual style policy:
+//   covered branch  → de-emphasized (gray) so the eye skips past it
+//   missed branch   → high-contrast (red + bold) so gaps stand out
+//   unknown / unreached → muted gray
+const COVERED_STYLE: StyleFormat = "gray";
+const MISSED_STYLE: StyleFormat = ["red", "bold"];
+const MUTED_STYLE: StyleFormat = "gray";
+
+interface PlacedMarker {
+	line: number;
+	text: string;
+}
+
+/**
+ * Compute the marker(s) for a branch and the line each should appear on.
+ *
+ * - For decided branches (some true/false hit) the TRUE and FALSE markers are
+ *   placed on the lines where the `?`/`:` clauses begin so the visual mapping
+ *   matches the branch direction in code.
+ * - Unreached and unknown-only branches stay on the check line as a single
+ *   consolidated badge — neither direction was actually evaluated.
+ */
+function placeMarkers(
+	branch: BranchPoint,
 	counts: BranchHitCounts | undefined,
 	colorize: Colorize,
-): string {
+	showCounts: boolean,
+): PlacedMarker[] {
+	// TODO: suppress this `⦸ unreached` marker when the branch is nested
+	// inside a parent direction that was already reported as missed (✗ MISS).
+	// The unreached badge then duplicates information already conveyed by the
+	// parent's MISS marker on the same line — see e.g. conjugate-mini.ts L12
+	// where `✗ MISS F` and `⦸ unreached` collide.
 	if (!counts) {
-		return colorize("gray", "⦸ unreached");
+		return [{ line: branch.line, text: colorize(MUTED_STYLE, "⦸ unreached") }];
 	}
 	const { trueHits, falseHits, unknownHits } = counts;
 	if (unknownHits > 0 && trueHits === 0 && falseHits === 0) {
-		return colorize("gray", `? unknown(${unknownHits})`);
+		const text = showCounts ? `? unknown(${unknownHits})` : "? unknown";
+		return [{ line: branch.line, text: colorize(MUTED_STYLE, text) }];
 	}
 
-	const trueText = `T(${trueHits})`;
-	const falseText = `F(${falseHits})`;
+	const tCount = showCounts ? `(${trueHits})` : "";
+	const fCount = showCounts ? `(${falseHits})` : "";
 	const t =
 		trueHits > 0
-			? colorize("green", `✓${trueText}`)
-			: colorize("red", `✗${trueText}`);
+			? colorize(COVERED_STYLE, `✓T${tCount}`)
+			: colorize(MISSED_STYLE, "✗ MISS T");
 	const f =
 		falseHits > 0
-			? colorize("green", `✓${falseText}`)
-			: colorize("red", `✗${falseText}`);
-	const u = unknownHits > 0 ? `  ${colorize("gray", `?(${unknownHits})`)}` : "";
-	return `${t}  ${f}${u}`;
+			? colorize(COVERED_STYLE, `✓F${fCount}`)
+			: colorize(MISSED_STYLE, "✗ MISS F");
+
+	const placed: PlacedMarker[] = [
+		{ line: branch.trueLine, text: t },
+		{ line: branch.falseLine, text: f },
+	];
+	if (unknownHits > 0) {
+		const uText = showCounts ? `?(${unknownHits})` : "?";
+		placed.push({
+			line: branch.line,
+			text: colorize(MUTED_STYLE, uText),
+		});
+	}
+	return placed;
+}
+
+function shouldShowCounts(
+	mode: NonNullable<RenderOptions["showCounts"]>,
+	hits: Map<string, BranchHitCounts>,
+): boolean {
+	if (mode === "always") return true;
+	if (mode === "never") return false;
+	for (const c of hits.values()) {
+		if (c.trueHits > 1 || c.falseHits > 1 || c.unknownHits > 1) return true;
+	}
+	return false;
 }
 
 // Unicode East Asian Width — Wide (W) and Fullwidth (F) ranges
@@ -156,21 +215,30 @@ export function renderAnnotated(
 ): string {
 	const colorize = makeColorize(options.color ?? false);
 	const tabWidth = options.tabWidth ?? DEFAULT_TAB_WIDTH;
+	const showCounts = shouldShowCounts(options.showCounts ?? "auto", hits);
 	const rawLines = sourceText.split("\n");
 	// Expand tabs up front — every width calculation and output uses the
 	// expanded form, so padding with spaces aligns correctly in any terminal.
 	const sourceLines = rawLines.map((l) => expandTabs(l, tabWidth));
 	const gutterWidth = String(sourceLines.length).length + 1;
 
-	// Group branches by line so multiple branches on one line get joined markers
+	// Place each branch's markers on the appropriate line(s); group by line so
+	// multiple markers landing on the same line get joined.
 	const markersByLine = new Map<number, string[]>();
 	for (const branch of branches) {
-		const marker = formatMarker(hits.get(branch.id), colorize);
-		const existing = markersByLine.get(branch.line);
-		if (existing) {
-			existing.push(marker);
-		} else {
-			markersByLine.set(branch.line, [marker]);
+		const placed = placeMarkers(
+			branch,
+			hits.get(branch.id),
+			colorize,
+			showCounts,
+		);
+		for (const { line, text } of placed) {
+			const existing = markersByLine.get(line);
+			if (existing) {
+				existing.push(text);
+			} else {
+				markersByLine.set(line, [text]);
+			}
 		}
 	}
 

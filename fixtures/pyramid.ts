@@ -12,7 +12,7 @@ export type Deep<X> =
 			: "L1F"
 		: "L0F";
 
-export type _drill = Deep<"a">;
+export type _pyramid = Deep<"a">;
 
 // Expected:
 //   target: Deep

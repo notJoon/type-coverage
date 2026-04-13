@@ -122,7 +122,7 @@ describe("integration — coverage measurement correctness", () => {
 	});
 
 	it("drills through a 4-level nested chain — trace length matches depth walked", () => {
-		const { branches, traces, counts } = load("nested-drill.ts", "Deep");
+		const { branches, traces, counts } = load("pyramid.ts", "Deep");
 		assert.equal(branches.length, 4);
 		assert.equal(traces.length, 1);
 		assert.equal(traces[0].length, 4);

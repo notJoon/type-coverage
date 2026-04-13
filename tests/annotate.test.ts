@@ -16,6 +16,22 @@ function hits(
 	return { trueHits, falseHits, unknownHits };
 }
 
+function displayWidth(s: string): number {
+	let w = 0;
+	for (const ch of s) {
+		const cp = ch.codePointAt(0) ?? 0;
+		const wide =
+			(cp >= 0x1100 && cp <= 0x115f) ||
+			(cp >= 0x2e80 && cp <= 0x9fff) ||
+			(cp >= 0xa000 && cp <= 0xa4cf) ||
+			(cp >= 0xac00 && cp <= 0xd7a3) ||
+			(cp >= 0xf900 && cp <= 0xfaff) ||
+			(cp >= 0xff00 && cp <= 0xff60);
+		w += wide ? 2 : 1;
+	}
+	return w;
+}
+
 describe("renderAnnotated", () => {
 	it("preserves source lines with gutter line numbers", () => {
 		const code = `type A = 1;
@@ -39,7 +55,7 @@ type B = 2;`;
 		assert.match(out, /✓F\(3\)/);
 	});
 
-	it("marks the uncovered direction with ✗", () => {
+	it("marks the uncovered direction with a high-emphasis MISS badge", () => {
 		const code = `type Is<X> = X extends string ? 1 : 0;`;
 		const sf = parse(code);
 		const branches = collectBranches(sf);
@@ -47,7 +63,69 @@ type B = 2;`;
 
 		const out = renderAnnotated(code, branches, map);
 		assert.match(out, /✓T\(2\)/);
-		assert.match(out, /✗F\(0\)/);
+		assert.match(out, /✗ MISS F/);
+		assert.doesNotMatch(out, /✗F\(0\)/, "should not show count for missed direction");
+	});
+
+	it("auto mode hides counts when no branch is hit more than once", () => {
+		const code = `type Is<X> = X extends string ? 1 : 0;`;
+		const sf = parse(code);
+		const branches = collectBranches(sf);
+		const map = new Map([[branches[0].id, hits(1, 1)]]);
+
+		const out = renderAnnotated(code, branches, map);
+		assert.match(out, /✓T(?!\()/, "T should not have count when hits == 1");
+		assert.match(out, /✓F(?!\()/, "F should not have count when hits == 1");
+		assert.doesNotMatch(out, /✓T\(/);
+		assert.doesNotMatch(out, /✓F\(/);
+	});
+
+	it("auto mode shows counts when any branch hit > 1", () => {
+		const code = `type Is<X> = X extends string ? 1 : 0;`;
+		const sf = parse(code);
+		const branches = collectBranches(sf);
+		const map = new Map([[branches[0].id, hits(3, 1)]]);
+
+		const out = renderAnnotated(code, branches, map);
+		assert.match(out, /✓T\(3\)/);
+		assert.match(out, /✓F\(1\)/);
+	});
+
+	it("showCounts: 'always' forces counts even for boolean coverage", () => {
+		const code = `type Is<X> = X extends string ? 1 : 0;`;
+		const sf = parse(code);
+		const branches = collectBranches(sf);
+		const map = new Map([[branches[0].id, hits(1, 1)]]);
+
+		const out = renderAnnotated(code, branches, map, { showCounts: "always" });
+		assert.match(out, /✓T\(1\)/);
+		assert.match(out, /✓F\(1\)/);
+	});
+
+	it("showCounts: 'never' suppresses counts even for high hit counts", () => {
+		const code = `type Is<X> = X extends string ? 1 : 0;`;
+		const sf = parse(code);
+		const branches = collectBranches(sf);
+		const map = new Map([[branches[0].id, hits(5, 7)]]);
+
+		const out = renderAnnotated(code, branches, map, { showCounts: "never" });
+		assert.doesNotMatch(out, /\(\d+\)/);
+	});
+
+	it("uses different visual emphasis for covered (gray) vs missed (red+bold)", () => {
+		const code = `type Is<X> = X extends string ? 1 : 0;`;
+		const sf = parse(code);
+		const branches = collectBranches(sf);
+		const map = new Map([[branches[0].id, hits(1, 0)]]);
+
+		const out = renderAnnotated(code, branches, map, { color: true });
+		const ESC = String.fromCharCode(0x1b);
+		// covered T uses gray (90); missed F uses red (31) + bold (1)
+		assert.ok(out.includes(`${ESC}[90m`), "expected gray for covered T");
+		assert.ok(
+			out.includes(`${ESC}[31m`) || out.includes(`${ESC}[1m`),
+			"expected red and/or bold for missed F",
+		);
 	});
 
 	it("marks a branch never reached by any test as unreached", () => {
@@ -69,7 +147,7 @@ type B = 2;`;
 		assert.match(out, /\?\s*unknown\(2\)/);
 	});
 
-	it("places annotation on the line where the conditional starts", () => {
+	it("splits T marker onto the `?` line and F marker onto the `:` line", () => {
 		const code = `type Outer<X> =
   X extends string
     ? "yes"
@@ -78,12 +156,43 @@ type B = 2;`;
 		const branches = collectBranches(sf);
 		const map = new Map([[branches[0].id, hits(1, 1)]]);
 
+		const out = renderAnnotated(code, branches, map, { showCounts: "always" });
+		const lines = out.split("\n");
+		// trueType "yes" on line 3 → T marker on line 3 (index 2)
+		assert.match(lines[2], /✓T\(1\)/);
+		assert.doesNotMatch(lines[2], /F\(/);
+		// falseType "no" on line 4 → F marker on line 4 (index 3)
+		assert.match(lines[3], /✓F\(1\)/);
+		assert.doesNotMatch(lines[3], /T\(/);
+		// Check line itself has no T/F marker
+		assert.doesNotMatch(lines[1], /[✓✗][TF]/);
+	});
+
+	it("keeps T and F markers on the same line for single-line conditionals", () => {
+		const code = `type Is<X> = X extends string ? 1 : 0;`;
+		const sf = parse(code);
+		const branches = collectBranches(sf);
+		const map = new Map([[branches[0].id, hits(2, 1)]]);
+
 		const out = renderAnnotated(code, branches, map);
 		const lines = out.split("\n");
-		// Conditional starts at line 2 (checkType "X" on line 2)
-		assert.match(lines[1], /✓T\(1\)/);
-		assert.match(lines[1], /✓F\(1\)/);
-		assert.doesNotMatch(lines[0], /✓T/);
+		assert.match(lines[0], /✓T\(2\)/);
+		assert.match(lines[0], /✓F\(1\)/);
+	});
+
+	it("consolidates unreached branches on the check line, not split", () => {
+		const code = `type Outer<X> =
+  X extends string
+    ? "yes"
+    : "no";`;
+		const sf = parse(code);
+		const branches = collectBranches(sf);
+		const out = renderAnnotated(code, branches, new Map());
+		const lines = out.split("\n");
+		// Check line has the unreached badge; ?/: lines have no marker
+		assert.match(lines[1], /unreached/);
+		assert.doesNotMatch(lines[2], /unreached/);
+		assert.doesNotMatch(lines[3], /unreached/);
 	});
 
 	it("annotates multiple branches independently", () => {
@@ -133,98 +242,45 @@ type B = 2;`;
 		assert.match(condLine, /^\s*2 │ {5}X extends/);
 	});
 
-	it("aligns markers when source mixes tabs, CJK, and ASCII", () => {
-		// Tabs expand to tabstops (8 columns); must not mis-align markers.
+	it("aligns markers across lines with mixed tabs, CJK, and ASCII", () => {
+		// Two conditionals on different lines; one has CJK in trueType.
+		// All markers (T or F) must land at the same display column even when
+		// the source mixes tabs and wide chars.
 		const code =
-			"type Conjugate<V, F> =\n" +
-			"\tV extends HadaVerb\n" +
-			'\t\t? F extends "해요" ? 1 : 0\n' +
-			"\t\t: 0;";
+			"type T1<X> =\n" +
+			"\tX extends string\n" +
+			'\t\t? "한국어"\n' +
+			'\t\t: "no";\n' +
+			"type T2<Y> =\n" +
+			"\tY extends number\n" +
+			'\t\t? "yes"\n' +
+			'\t\t: "no";';
 		const sf = parse(code);
 		const branches = collectBranches(sf);
 		assert.equal(branches.length, 2);
 
 		const map = new Map([
-			[branches[0].id, hits(1, 0)],
-			[branches[1].id, hits(1, 0)],
+			[branches[0].id, hits(1, 1)],
+			[branches[1].id, hits(1, 1)],
 		]);
 
 		const out = renderAnnotated(code, branches, map);
-		const lines = out.split("\n").filter((l) => l.includes("✓T"));
-		assert.equal(lines.length, 2);
+		const MARKER_RE = /[✓✗] ?(MISS )?[TF]/;
+		const markerLines = out.split("\n").filter((l) => MARKER_RE.test(l));
+		assert.ok(markerLines.length >= 4, "expected at least 4 marker lines");
 
-		// Markers must align at the same DISPLAY column. String index differs
-		// when lines contain CJK chars (1 char but width 2), so measure width.
-		function dispWidth(s: string): number {
-			let w = 0;
-			for (const ch of s) {
-				const cp = ch.codePointAt(0) ?? 0;
-				const wide =
-					(cp >= 0x1100 && cp <= 0x115f) ||
-					(cp >= 0x2e80 && cp <= 0x9fff) ||
-					(cp >= 0xac00 && cp <= 0xd7a3);
-				w += wide ? 2 : 1;
-			}
-			return w;
-		}
-		const cols = lines.map((l) => dispWidth(l.slice(0, l.indexOf("✓T"))));
-		assert.equal(
-			cols[0],
-			cols[1],
-			`markers must align at the same display column: ${cols.join(", ")}`,
+		const cols = markerLines.map((l) => {
+			const m = l.match(MARKER_RE);
+			return m ? displayWidth(l.slice(0, l.indexOf(m[0]))) : -1;
+		});
+		assert.ok(
+			cols.every((c) => c === cols[0]),
+			`markers must align at the same column: ${cols.join(", ")}`,
 		);
 
-		// Output must not contain literal tab characters (expanded away)
-		for (const l of lines) {
+		for (const l of markerLines) {
 			assert.ok(!l.includes("\t"), "tabs must be expanded in rendered output");
 		}
-	});
-
-	it("aligns markers to the same column even with CJK characters", () => {
-		// "V extends HadaVerb" is ASCII; "F extends \"해요\"" contains CJK (width 2 each).
-		// Both marker blocks must start at the same display column.
-		const code = `type Conjugate<V, F> =
-  V extends HadaVerb
-    ? F extends "해요" ? 1 : 0
-    : 0;`;
-		const sf = parse(code);
-		const branches = collectBranches(sf);
-		assert.equal(branches.length, 2);
-
-		const map = new Map([
-			[branches[0].id, hits(1, 0)],
-			[branches[1].id, hits(1, 0)],
-		]);
-
-		const out = renderAnnotated(code, branches, map);
-		const lines = out.split("\n");
-
-		function displayWidth(s: string): number {
-			let w = 0;
-			for (const ch of s) {
-				const cp = ch.codePointAt(0) ?? 0;
-				const wide =
-					(cp >= 0x1100 && cp <= 0x115f) ||
-					(cp >= 0x2e80 && cp <= 0x9fff) ||
-					(cp >= 0xa000 && cp <= 0xa4cf) ||
-					(cp >= 0xac00 && cp <= 0xd7a3) ||
-					(cp >= 0xf900 && cp <= 0xfaff) ||
-					(cp >= 0xff00 && cp <= 0xff60);
-				w += wide ? 2 : 1;
-			}
-			return w;
-		}
-
-		const markerCols = lines
-			.filter((l) => l.includes("✓T"))
-			.map((l) => displayWidth(l.slice(0, l.indexOf("✓T"))));
-
-		assert.equal(markerCols.length, 2);
-		assert.equal(
-			markerCols[0],
-			markerCols[1],
-			`markers must align: got columns ${markerCols.join(", ")}`,
-		);
 	});
 
 	it("wraps markers in ANSI when color option is true", () => {

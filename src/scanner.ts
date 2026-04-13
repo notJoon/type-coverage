@@ -4,7 +4,12 @@ import ts from "typescript";
 export interface BranchPoint {
 	id: string;
 	file: string;
+	/** Line of the conditional's `checkType` (where `X extends Y` begins). */
 	line: number;
+	/** Line where the TRUE branch (`?` clause) begins. May equal `line` for single-line conditionals. */
+	trueLine: number;
+	/** Line where the FALSE branch (`:` clause) begins. May equal `line` for single-line conditionals. */
+	falseLine: number;
 	typeName: string;
 	checkText: string;
 	extendsText: string;
@@ -51,11 +56,21 @@ export function collectBranches(
 			const line = line0 + 1;
 			const column = character + 1;
 			const id = `${filePath}:${line}:${column}`;
+			const trueLine =
+				sourceFile.getLineAndCharacterOfPosition(
+					node.trueType.getStart(sourceFile),
+				).line + 1;
+			const falseLine =
+				sourceFile.getLineAndCharacterOfPosition(
+					node.falseType.getStart(sourceFile),
+				).line + 1;
 
 			branches.push({
 				id,
 				file: filePath,
 				line,
+				trueLine,
+				falseLine,
 				typeName: getEnclosingTypeName(node),
 				checkText: node.checkType.getText(sourceFile),
 				extendsText: node.extendsType.getText(sourceFile),

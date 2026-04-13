@@ -160,6 +160,51 @@ type B<T> = T extends number ? 1 : 0;`;
 		assert.equal(result[0].node.kind, ts.SyntaxKind.ConditionalType);
 	});
 
+	it("records trueLine and falseLine for single-line conditional", () => {
+		const sf = parse(`type X<T> = T extends string ? "y" : "n";`);
+		const result = collectBranches(sf);
+
+		assert.equal(result[0].line, 1);
+		assert.equal(result[0].trueLine, 1);
+		assert.equal(result[0].falseLine, 1);
+	});
+
+	it("records trueLine and falseLine for multi-line conditional", () => {
+		const code = `type X<T> =
+  T extends string
+    ? "yes"
+    : "no";`;
+		const sf = parse(code);
+		const result = collectBranches(sf);
+
+		assert.equal(result[0].line, 2);
+		// trueType "yes" begins on line 3 (after the `?`)
+		assert.equal(result[0].trueLine, 3);
+		// falseType "no" begins on line 4 (after the `:`)
+		assert.equal(result[0].falseLine, 4);
+	});
+
+	it("records trueLine and falseLine for nested conditionals", () => {
+		const code = `type X<T> =
+  T extends string
+    ? T extends "a"
+      ? "found"
+      : "other"
+    : "no";`;
+		const sf = parse(code);
+		const result = collectBranches(sf);
+
+		assert.equal(result.length, 2);
+		// outer: check on L2, true clause on L3 (inner conditional starts there), false clause on L6
+		assert.equal(result[0].line, 2);
+		assert.equal(result[0].trueLine, 3);
+		assert.equal(result[0].falseLine, 6);
+		// inner: check on L3, true clause on L4, false clause on L5
+		assert.equal(result[1].line, 3);
+		assert.equal(result[1].trueLine, 4);
+		assert.equal(result[1].falseLine, 5);
+	});
+
 	it("uses projectRoot to compute relative file path", () => {
 		const sf = parse(
 			`type X<T> = T extends string ? "y" : "n";`,

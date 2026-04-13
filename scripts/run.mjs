@@ -15,7 +15,7 @@ import { parseArgs } from "node:util";
 import ts from "typescript";
 import { renderAnnotated } from "../dist/annotate.js";
 import { runFixture } from "../dist/fixture.js";
-import { collectInstantiations } from "../dist/instantiation-parser.js";
+import { collectInstantiations } from "../dist/parser.js";
 import { collectBranches } from "../dist/scanner.js";
 import { traceConditionalChain } from "../dist/tracer.js";
 
