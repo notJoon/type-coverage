@@ -1,6 +1,6 @@
 import ts from "typescript";
 
-export interface TestAssertion {
+export interface TargetInstantiation {
 	name: string;
 	targetTypeName: string;
 	typeArgs: ts.Type[];
@@ -20,29 +20,25 @@ function findFirstTargetRef(
 	) {
 		return node;
 	}
-	let found: ts.TypeReferenceNode | undefined;
-	node.forEachChild((child) => {
-		if (!found) {
-			found = findFirstTargetRef(child, targetTypeName);
-		}
-	});
-	return found;
+	return ts.forEachChild(node, (child) =>
+		findFirstTargetRef(child, targetTypeName),
+	);
 }
 
-export function parseTestAssertions(
+export function collectInstantiations(
 	sourceFile: ts.SourceFile,
 	targetTypeName: string,
 	checker: ts.TypeChecker,
-): TestAssertion[] {
-	const assertions: TestAssertion[] = [];
+): TargetInstantiation[] {
+	const instantiations: TargetInstantiation[] = [];
 
-	ts.forEachChild(sourceFile, (node) => {
+	for (const node of sourceFile.statements) {
 		if (!ts.isTypeAliasDeclaration(node)) {
-			return;
+			continue;
 		}
 		const ref = findFirstTargetRef(node.type, targetTypeName);
 		if (!ref?.typeArguments) {
-			return;
+			continue;
 		}
 
 		const typeArgs = ref.typeArguments.map((arg) =>
@@ -52,13 +48,13 @@ export function parseTestAssertions(
 			sourceFile.getLineAndCharacterOfPosition(ref.getStart(sourceFile)).line +
 			1;
 
-		assertions.push({
+		instantiations.push({
 			name: node.name.text,
 			targetTypeName,
 			typeArgs,
 			line,
 		});
-	});
+	}
 
-	return assertions;
+	return instantiations;
 }

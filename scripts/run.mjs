@@ -7,7 +7,7 @@
 //       --project <tsconfig.json> --target <TypeName> --tests <test-file.ts>
 //
 //   Fixture mode — run against a self-contained fixture file that defines
-//   both the target type and its test assertion aliases:
+//   both the target type and its instantiation aliases:
 //     node scripts/run.mjs --fixture fixtures/<name>.ts --target <TypeName>
 
 import path from "node:path";
@@ -15,8 +15,8 @@ import { parseArgs } from "node:util";
 import ts from "typescript";
 import { renderAnnotated } from "../dist/annotate.js";
 import { runFixture } from "../dist/fixture.js";
+import { collectInstantiations } from "../dist/instantiation-parser.js";
 import { collectBranches } from "../dist/scanner.js";
-import { parseTestAssertions } from "../dist/test-parser.js";
 import { traceConditionalChain } from "../dist/tracer.js";
 
 const { values } = parseArgs({
@@ -105,7 +105,7 @@ const paramNames = (targetAlias.typeParameters ?? []).map((p) => p.name.text);
 const allBranches = collectBranches(targetSourceFile, projectRoot);
 const branches = allBranches.filter((b) => b.typeName === targetName);
 
-// 3. Parse test assertions
+// 3. Collect target instantiations from the test file
 const testSourceFile = program.getSourceFile(testFilePath);
 if (!testSourceFile) {
 	console.error(`Test file not found in program: ${testFilePath}`);
@@ -114,14 +114,18 @@ if (!testSourceFile) {
 	);
 	process.exit(1);
 }
-const assertions = parseTestAssertions(testSourceFile, targetName, checker);
+const instantiations = collectInstantiations(
+	testSourceFile,
+	targetName,
+	checker,
+);
 
-// 4. Trace each assertion
+// 4. Trace each instantiation
 const hits = new Map();
-for (const a of assertions) {
+for (const inst of instantiations) {
 	const paramMap = new Map();
 	for (const [i, name] of paramNames.entries()) {
-		if (a.typeArgs[i]) paramMap.set(name, a.typeArgs[i]);
+		if (inst.typeArgs[i]) paramMap.set(name, inst.typeArgs[i]);
 	}
 	const traces = traceConditionalChain(
 		rootCond,
@@ -180,7 +184,7 @@ const slice = rendered.slice(startLine, endLine + 1);
 
 console.log(`\nFile: ${path.relative(projectRoot, targetSourceFile.fileName)}`);
 console.log(`Target: ${targetName}<${paramNames.join(", ")}>`);
-console.log(`Tests analyzed: ${assertions.length}\n`);
+console.log(`Instantiations analyzed: ${instantiations.length}\n`);
 console.log(slice.join("\n"));
 
 // 6. Summary
@@ -192,7 +196,7 @@ console.log(
 function runInFixtureMode() {
 	const fixturePath = path.resolve(values.fixture);
 	const result = runFixture(fixturePath, values.target);
-	const { sourceFile, branches, assertions, counts } = result;
+	const { sourceFile, branches, instantiations, counts } = result;
 
 	const fullText = sourceFile.text;
 	const rendered = renderAnnotated(fullText, branches, counts, {
@@ -202,7 +206,7 @@ function runInFixtureMode() {
 
 	console.log(`\nFixture: ${path.relative(process.cwd(), fixturePath)}`);
 	console.log(`Target: ${values.target}`);
-	console.log(`Tests analyzed: ${assertions.length}\n`);
+	console.log(`Instantiations analyzed: ${instantiations.length}\n`);
 	console.log(rendered);
 
 	const s = summarize(branches, counts);

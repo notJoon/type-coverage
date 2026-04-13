@@ -2,16 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import type { BranchHitCounts } from "./annotate.js";
+import { collectInstantiations, type TargetInstantiation } from "./parser.js";
 import { type BranchPoint, collectBranches } from "./scanner.js";
-import { parseTestAssertions, type TestAssertion } from "./test-parser.js";
 import { type TraceResult, traceConditionalChain } from "./tracer.js";
 
-export type { BranchPoint, TestAssertion, TraceResult };
+export type { BranchPoint, TargetInstantiation, TraceResult };
 
 export interface FixtureRunResult {
 	sourceFile: ts.SourceFile;
 	branches: BranchPoint[];
-	assertions: TestAssertion[];
+	instantiations: TargetInstantiation[];
 	traces: TraceResult[][];
 	counts: Map<string, BranchHitCounts>;
 }
@@ -88,12 +88,12 @@ function makeFixtureProgram(
 }
 
 /**
- * Load a fixture file and run the scanner + test-parser + tracer pipeline
- * against a named target conditional type. Returns the source file, branch
- * points, per-assertion traces, and aggregated per-branch hit counts.
+ * Load a fixture file and run the scanner + instantiation-parser + tracer
+ * pipeline against a named target conditional type. Returns the source file,
+ * branch points, per-instantiation traces, and aggregated per-branch hit counts.
  *
  * The fixture is expected to define both the target type and one or more
- * `type _name = Target<...>` assertion aliases in the same file.
+ * `type _name = Target<...>` instantiation aliases in the same file.
  */
 export function runFixture(
 	fixturePath: string,
@@ -114,13 +114,17 @@ export function runFixture(
 		);
 	}
 
-	const assertions = parseTestAssertions(sourceFile, targetTypeName, checker);
+	const instantiations = collectInstantiations(
+		sourceFile,
+		targetTypeName,
+		checker,
+	);
 	const traces: TraceResult[][] = [];
 	const counts = new Map<string, BranchHitCounts>();
 
-	for (const assertion of assertions) {
+	for (const inst of instantiations) {
 		const paramMap = new Map<string, ts.Type>(
-			target.paramNames.map((name, i) => [name, assertion.typeArgs[i]]),
+			target.paramNames.map((name, i) => [name, inst.typeArgs[i]]),
 		);
 		const trace = traceConditionalChain(
 			target.cond,
@@ -139,5 +143,5 @@ export function runFixture(
 		}
 	}
 
-	return { sourceFile, branches, assertions, traces, counts };
+	return { sourceFile, branches, instantiations, traces, counts };
 }

@@ -12,13 +12,13 @@ const FIXTURES = path.resolve(import.meta.dirname, "..", "..", "fixtures");
 
 describe("fixture: classify.ts", () => {
 	it("reports 4/4 directions covered across 3 tests", () => {
-		const { branches, assertions, counts } = runFixture(
+		const { branches, instantiations, counts } = runFixture(
 			path.join(FIXTURES, "classify.ts"),
 			"Classify",
 		);
 
 		assert.equal(branches.length, 2);
-		assert.equal(assertions.length, 3);
+		assert.equal(instantiations.length, 3);
 
 		for (const b of branches) {
 			const c = counts.get(b.id);

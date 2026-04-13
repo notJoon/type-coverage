@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import ts from "typescript";
-import { parseTestAssertions } from "../src/test-parser.js";
+import { collectInstantiations } from "../src/parser.js";
 
 const VIRTUAL_PATH = "/virtual/test.ts";
 
@@ -35,10 +35,10 @@ function makeProgram(code: string): {
 	return { sourceFile, checker: program.getTypeChecker() };
 }
 
-describe("parseTestAssertions", () => {
+describe("collectInstantiations", () => {
 	it("returns empty array for file with no target references", () => {
 		const { sourceFile, checker } = makeProgram(`type X = string;`);
-		const result = parseTestAssertions(sourceFile, "Conjugate", checker);
+		const result = collectInstantiations(sourceFile, "Conjugate", checker);
 		assert.equal(result.length, 0);
 	});
 
@@ -48,7 +48,7 @@ type Conjugate<V, F> = [V, F];
 type Test = Conjugate<"hello", "past">;
 `;
 		const { sourceFile, checker } = makeProgram(code);
-		const result = parseTestAssertions(sourceFile, "Conjugate", checker);
+		const result = collectInstantiations(sourceFile, "Conjugate", checker);
 
 		assert.equal(result.length, 1);
 		assert.equal(result[0].name, "Test");
@@ -66,7 +66,7 @@ type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B 
 type _test = Expect<Equal<Conjugate<"a", "b">, ["a", "b"]>>;
 `;
 		const { sourceFile, checker } = makeProgram(code);
-		const result = parseTestAssertions(sourceFile, "Conjugate", checker);
+		const result = collectInstantiations(sourceFile, "Conjugate", checker);
 
 		assert.equal(result.length, 1);
 		assert.equal(result[0].name, "_test");
@@ -75,7 +75,7 @@ type _test = Expect<Equal<Conjugate<"a", "b">, ["a", "b"]>>;
 		assert.equal(checker.typeToString(result[0].typeArgs[1]), `"b"`);
 	});
 
-	it("extracts multiple assertions from the same file", () => {
+	it("extracts multiple instantiations from the same file", () => {
 		const code = `
 type Conjugate<V, F> = [V, F];
 type _t1 = Conjugate<"x", "y">;
@@ -83,7 +83,7 @@ type _t2 = Conjugate<"p", "q">;
 type _t3 = Conjugate<"m", "n">;
 `;
 		const { sourceFile, checker } = makeProgram(code);
-		const result = parseTestAssertions(sourceFile, "Conjugate", checker);
+		const result = collectInstantiations(sourceFile, "Conjugate", checker);
 
 		assert.equal(result.length, 3);
 		const names = result.map((a) => a.name);
@@ -98,7 +98,7 @@ type _t1 = Conjugate<"a", "b">;
 type _t2 = Decline<"c">;
 `;
 		const { sourceFile, checker } = makeProgram(code);
-		const result = parseTestAssertions(sourceFile, "Conjugate", checker);
+		const result = collectInstantiations(sourceFile, "Conjugate", checker);
 
 		assert.equal(result.length, 1);
 		assert.equal(result[0].name, "_t1");
@@ -108,7 +108,7 @@ type _t2 = Decline<"c">;
 		const code = `type Conjugate<V, F> = [V, F];
 type _t1 = Conjugate<"a", "b">;`;
 		const { sourceFile, checker } = makeProgram(code);
-		const result = parseTestAssertions(sourceFile, "Conjugate", checker);
+		const result = collectInstantiations(sourceFile, "Conjugate", checker);
 
 		assert.equal(result.length, 1);
 		assert.equal(result[0].line, 2);
@@ -121,7 +121,7 @@ type _t1 = Conjugate;
 type _t2 = Conjugate<"x", "y">;
 `;
 		const { sourceFile, checker } = makeProgram(code);
-		const result = parseTestAssertions(sourceFile, "Conjugate", checker);
+		const result = collectInstantiations(sourceFile, "Conjugate", checker);
 
 		assert.equal(result.length, 1);
 		assert.equal(result[0].name, "_t2");
@@ -133,7 +133,7 @@ type Conjugate<V, F> = [V, F];
 type _t1 = [Conjugate<"a", "b">, Conjugate<"c", "d">];
 `;
 		const { sourceFile, checker } = makeProgram(code);
-		const result = parseTestAssertions(sourceFile, "Conjugate", checker);
+		const result = collectInstantiations(sourceFile, "Conjugate", checker);
 
 		assert.equal(result.length, 1);
 		assert.equal(result[0].name, "_t1");
@@ -148,7 +148,7 @@ type Box<T> = { value: T };
 type _t1 = Box<Array<Conjugate<"deep", "nested">>>;
 `;
 		const { sourceFile, checker } = makeProgram(code);
-		const result = parseTestAssertions(sourceFile, "Conjugate", checker);
+		const result = collectInstantiations(sourceFile, "Conjugate", checker);
 
 		assert.equal(result.length, 1);
 		assert.equal(checker.typeToString(result[0].typeArgs[0]), `"deep"`);
@@ -161,7 +161,7 @@ type Conjugate<V, F> = [V, F];
 type _t1 = Conjugate<"a", "b">;
 `;
 		const { sourceFile, checker } = makeProgram(code);
-		const result = parseTestAssertions(sourceFile, "NonExistent", checker);
+		const result = collectInstantiations(sourceFile, "NonExistent", checker);
 		assert.equal(result.length, 0);
 	});
 });
