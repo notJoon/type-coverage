@@ -13,27 +13,25 @@ export interface BranchPoint {
 }
 
 function getNamedNodeText(node: ts.Node): string | null {
-	if (ts.isTypeAliasDeclaration(node)) {
+	if (ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)) {
 		return node.name.text;
 	}
-	if (ts.isInterfaceDeclaration(node)) {
-		return node.name.text;
-	}
+
 	if (ts.isPropertySignature(node) && node.name && ts.isIdentifier(node.name)) {
 		return node.name.text;
 	}
+
 	return null;
 }
 
 function getEnclosingTypeName(node: ts.Node): string {
-	let current = node.parent;
-	while (current) {
+	for (let current = node.parent; current; current = current.parent) {
 		const name = getNamedNodeText(current);
 		if (name) {
 			return name;
 		}
-		current = current.parent;
 	}
+
 	return "(anonymous)";
 }
 

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import type { BranchHitCounts } from "./annotate.js";
 import { type BranchPoint, collectBranches } from "./scanner.js";
 import { parseTestAssertions, type TestAssertion } from "./test-parser.js";
 import { type TraceResult, traceConditionalChain } from "./tracer.js";
@@ -12,10 +13,45 @@ export interface FixtureRunResult {
 	branches: BranchPoint[];
 	assertions: TestAssertion[];
 	traces: TraceResult[][];
-	counts: Map<
-		string,
-		{ trueHits: number; falseHits: number; unknownHits: number }
-	>;
+	counts: Map<string, BranchHitCounts>;
+}
+
+interface TargetAlias {
+	cond: ts.ConditionalTypeNode;
+	paramNames: string[];
+}
+
+function findTargetAlias(
+	sourceFile: ts.SourceFile,
+	targetTypeName: string,
+): TargetAlias | undefined {
+	for (const node of sourceFile.statements) {
+		if (
+			ts.isTypeAliasDeclaration(node) &&
+			node.name.text === targetTypeName &&
+			ts.isConditionalTypeNode(node.type)
+		) {
+			return {
+				cond: node.type,
+				paramNames: (node.typeParameters ?? []).map((p) => p.name.text),
+			};
+		}
+	}
+	return undefined;
+}
+
+function emptyCounts(): BranchHitCounts {
+	return { trueHits: 0, falseHits: 0, unknownHits: 0 };
+}
+
+function bumpCount(counts: BranchHitCounts, taken: TraceResult["taken"]): void {
+	if (taken === "true") {
+		counts.trueHits++;
+	} else if (taken === "false") {
+		counts.falseHits++;
+	} else {
+		counts.unknownHits++;
+	}
 }
 
 function makeFixtureProgram(
@@ -30,8 +66,10 @@ function makeFixtureProgram(
 		}
 		return orig(name, lang, onError, shouldCreate);
 	};
+
 	const origExists = host.fileExists.bind(host);
 	host.fileExists = (name) => name === fixturePath || origExists(name);
+
 	const origRead = host.readFile.bind(host);
 	host.readFile = (name) => (name === fixturePath ? code : origRead(name));
 
@@ -40,10 +78,12 @@ function makeFixtureProgram(
 		{ target: ts.ScriptTarget.Latest, strict: true, noLib: true },
 		host,
 	);
+
 	const sourceFile = program.getSourceFile(fixturePath);
 	if (!sourceFile) {
 		throw new Error(`fixture source file not found: ${fixturePath}`);
 	}
+
 	return { sourceFile, checker: program.getTypeChecker() };
 }
 
@@ -67,19 +107,8 @@ export function runFixture(
 		(b) => b.typeName === targetTypeName,
 	);
 
-	let cond: ts.ConditionalTypeNode | undefined;
-	let paramNames: string[] = [];
-	ts.forEachChild(sourceFile, (node) => {
-		if (
-			ts.isTypeAliasDeclaration(node) &&
-			node.name.text === targetTypeName &&
-			ts.isConditionalTypeNode(node.type)
-		) {
-			cond = node.type;
-			paramNames = (node.typeParameters ?? []).map((p) => p.name.text);
-		}
-	});
-	if (!cond) {
+	const target = findTargetAlias(sourceFile, targetTypeName);
+	if (!target) {
 		throw new Error(
 			`target conditional type "${targetTypeName}" not found in ${fixturePath}`,
 		);
@@ -87,28 +116,26 @@ export function runFixture(
 
 	const assertions = parseTestAssertions(sourceFile, targetTypeName, checker);
 	const traces: TraceResult[][] = [];
-	const counts = new Map<
-		string,
-		{ trueHits: number; falseHits: number; unknownHits: number }
-	>();
+	const counts = new Map<string, BranchHitCounts>();
 
-	for (const a of assertions) {
-		const paramMap = new Map<string, ts.Type>();
-		for (const [i, name] of paramNames.entries()) {
-			paramMap.set(name, a.typeArgs[i]);
-		}
-		const tr = traceConditionalChain(cond, paramMap, sourceFile, checker);
-		traces.push(tr);
-		for (const t of tr) {
-			const entry = counts.get(t.branchId) ?? {
-				trueHits: 0,
-				falseHits: 0,
-				unknownHits: 0,
-			};
-			if (t.taken === "true") entry.trueHits++;
-			else if (t.taken === "false") entry.falseHits++;
-			else entry.unknownHits++;
-			counts.set(t.branchId, entry);
+	for (const assertion of assertions) {
+		const paramMap = new Map<string, ts.Type>(
+			target.paramNames.map((name, i) => [name, assertion.typeArgs[i]]),
+		);
+		const trace = traceConditionalChain(
+			target.cond,
+			paramMap,
+			sourceFile,
+			checker,
+		);
+		traces.push(trace);
+		for (const step of trace) {
+			let entry = counts.get(step.branchId);
+			if (!entry) {
+				entry = emptyCounts();
+				counts.set(step.branchId, entry);
+			}
+			bumpCount(entry, step.taken);
 		}
 	}
 

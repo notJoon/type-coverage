@@ -11,11 +11,13 @@ type IsTypeAssignableTo = (source: ts.Type, target: ts.Type) => boolean;
 function getIsTypeAssignableTo(checker: ts.TypeChecker): IsTypeAssignableTo {
 	const fn = (checker as unknown as { isTypeAssignableTo?: IsTypeAssignableTo })
 		.isTypeAssignableTo;
+
 	if (typeof fn !== "function") {
 		throw new Error(
 			"checker.isTypeAssignableTo is unavailable in this TypeScript version",
 		);
 	}
+
 	return fn.bind(checker);
 }
 
@@ -27,9 +29,11 @@ function computeBranchId(
 	const filePath = projectRoot
 		? path.relative(projectRoot, sourceFile.fileName)
 		: sourceFile.fileName;
+
 	const { line, character } = sourceFile.getLineAndCharacterOfPosition(
 		condNode.getStart(sourceFile),
 	);
+
 	return `${filePath}:${line + 1}:${character + 1}`;
 }
 
@@ -43,31 +47,23 @@ function resolveCheckType(
 	paramMap: Map<string, ts.Type>,
 ): ts.Type | null {
 	const checkNode = condNode.checkType;
-
 	if (
-		ts.isTypeReferenceNode(checkNode) &&
-		ts.isIdentifier(checkNode.typeName) &&
-		checkNode.typeArguments === undefined
+		!ts.isTypeReferenceNode(checkNode) ||
+		!ts.isIdentifier(checkNode.typeName) ||
+		checkNode.typeArguments !== undefined
 	) {
-		const name = checkNode.typeName.text;
-		if (paramMap.has(name)) {
-			return paramMap.get(name) ?? null;
-		}
+		return null;
 	}
-	return null;
+
+	return paramMap.get(checkNode.typeName.text) ?? null;
 }
 
-function containsInfer(node: ts.TypeNode): boolean {
+function containsInfer(node: ts.Node): boolean {
 	if (node.kind === ts.SyntaxKind.InferType) {
 		return true;
 	}
-	let found = false;
-	node.forEachChild((child) => {
-		if (!found && child && "kind" in child) {
-			found = containsInfer(child as ts.TypeNode);
-		}
-	});
-	return found;
+
+	return ts.forEachChild(node, containsInfer) ?? false;
 }
 
 function resolveExtendsType(
@@ -77,6 +73,7 @@ function resolveExtendsType(
 	if (containsInfer(condNode.extendsType)) {
 		return null;
 	}
+
 	try {
 		return checker.getTypeFromTypeNode(condNode.extendsType);
 	} catch {
