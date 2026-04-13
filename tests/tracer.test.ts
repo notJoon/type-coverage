@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import ts from "typescript";
-import { traceConditionalChain } from "./tracer.js";
+import { traceConditionalChain } from "../src/tracer.js";
 
 const VIRTUAL_PATH = "/virtual/test.ts";
 

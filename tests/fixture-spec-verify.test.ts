@@ -8,10 +8,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { runFixture } from "./fixture.js";
+import { runFixture } from "../src/fixture.js";
 import { parseExpected } from "./fixture-spec.js";
 
-const FIXTURES = path.resolve(import.meta.dirname, "..", "fixtures");
+const FIXTURES = path.resolve(import.meta.dirname, "..", "..", "fixtures");
 
 function listFixtures(): string[] {
 	return fs

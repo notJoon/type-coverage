@@ -10,9 +10,9 @@ import {
 	type BranchPoint,
 	type FixtureRunResult,
 	runFixture,
-} from "./fixture.js";
+} from "../src/fixture.js";
 
-const FIXTURES = path.resolve(import.meta.dirname, "..", "fixtures");
+const FIXTURES = path.resolve(import.meta.dirname, "..", "..", "fixtures");
 
 function load(name: string, target: string): FixtureRunResult {
 	return runFixture(path.join(FIXTURES, name), target);

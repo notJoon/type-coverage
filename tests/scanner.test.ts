@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import ts from "typescript";
-import { collectBranches } from "./scanner.js";
+import { collectBranches } from "../src/scanner.js";
 
 function parse(code: string, fileName = "test.ts"): ts.SourceFile {
 	return ts.createSourceFile(fileName, code, ts.ScriptTarget.Latest, true);

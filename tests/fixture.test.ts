@@ -5,10 +5,10 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { runFixture } from "./fixture.js";
+import { runFixture } from "../src/fixture.js";
 
 // Tests run from dist/ (rootDir=src, outDir=dist, so dist/ is one level up from project root)
-const FIXTURES = path.resolve(import.meta.dirname, "..", "fixtures");
+const FIXTURES = path.resolve(import.meta.dirname, "..", "..", "fixtures");
 
 describe("fixture: classify.ts", () => {
 	it("reports 4/4 directions covered across 3 tests", () => {

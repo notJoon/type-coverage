@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import ts from "typescript";
-import { parseTestAssertions } from "./test-parser.js";
+import { parseTestAssertions } from "../src/test-parser.js";
 
 const VIRTUAL_PATH = "/virtual/test.ts";
 
