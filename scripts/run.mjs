@@ -10,6 +10,7 @@
 //   both the target type and its instantiation aliases:
 //     node scripts/run.mjs --fixture fixtures/<name>.ts --target <TypeName>
 
+import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import ts from "typescript";
@@ -18,6 +19,10 @@ import { runFixture } from "../dist/fixture.js";
 import { collectInstantiations } from "../dist/parser.js";
 import { collectBranches } from "../dist/scanner.js";
 import { traceConditionalChain } from "../dist/tracer.js";
+import {
+	replaceExpectedBlock,
+	serializeExpected,
+} from "../dist-tests/tests/fixture-spec.js";
 
 const { values } = parseArgs({
 	options: {
@@ -27,6 +32,7 @@ const { values } = parseArgs({
 		fixture: { type: "string", short: "f" },
 		color: { type: "boolean", default: true },
 		"tab-width": { type: "string" },
+		"update-test": { type: "boolean", default: false },
 	},
 });
 
@@ -196,6 +202,24 @@ console.log(
 function runInFixtureMode() {
 	const fixturePath = path.resolve(values.fixture);
 	const result = runFixture(fixturePath, values.target);
+
+	if (values["update-test"]) {
+		const original = fs.readFileSync(fixturePath, "utf8");
+		const newBlock = serializeExpected(result, values.target);
+		const updated = replaceExpectedBlock(original, newBlock);
+		if (updated !== original) {
+			fs.writeFileSync(fixturePath, updated);
+			console.log(
+				`Updated Expected block in ${path.relative(process.cwd(), fixturePath)}`,
+			);
+		} else {
+			console.log(
+				`No change — Expected block already matches actual output for ${path.relative(process.cwd(), fixturePath)}`,
+			);
+		}
+		return;
+	}
+
 	const { sourceFile, branches, instantiations, counts } = result;
 
 	const fullText = sourceFile.text;

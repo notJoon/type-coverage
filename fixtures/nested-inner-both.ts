@@ -18,3 +18,9 @@ export type _only_outer = T<"outer-yes">;
 //   branches: 2
 //   coverage: 3/4
 //   unknown: 0
+//   hits:
+//     L6: T=2 F=0
+//     L7: T=1 F=1
+//   traces:
+//     [0]: TT
+//     [1]: TF

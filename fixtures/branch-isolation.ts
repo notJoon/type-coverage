@@ -19,3 +19,10 @@ export type _t2 = T<"yes">;
 //   branches: 3
 //   coverage: 2/6
 //   unknown: 0
+//   hits:
+//     L5: T=2 F=0
+//     L6: T=2 F=0
+//     L9: unreached
+//   traces:
+//     [0]: TT
+//     [1]: TT

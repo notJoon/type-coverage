@@ -21,3 +21,11 @@ export type _c = T<"c">;
 //   branches: 3
 //   coverage: 5/6
 //   unknown: 0
+//   hits:
+//     L6: T=1 F=2
+//     L7: T=1 F=0
+//     L10: T=1 F=1
+//   traces:
+//     [0]: TT
+//     [1]: FT
+//     [2]: FF

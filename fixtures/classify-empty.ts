@@ -13,3 +13,6 @@ export type Classify<X> =
 //   branches: 2
 //   coverage: 0/4
 //   unknown: 0
+//   hits:
+//     L4: unreached
+//     L6: unreached

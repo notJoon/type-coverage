@@ -13,3 +13,7 @@ export type _mixed = IsStr<"a" | 42>;
 //   branches: 1
 //   coverage: 1/2
 //   unknown: 0
+//   hits:
+//     L6: T=0 F=1
+//   traces:
+//     [0]: F

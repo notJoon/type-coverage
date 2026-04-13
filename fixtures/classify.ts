@@ -17,3 +17,10 @@ export type _b = Classify<true>;
 //   branches: 2
 //   coverage: 4/4
 //   unknown: 0
+//   hits:
+//     L4: T=1 F=2
+//     L6: T=1 F=1
+//   traces:
+//     [0]: T
+//     [1]: FT
+//     [2]: FF

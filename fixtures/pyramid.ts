@@ -20,3 +20,10 @@ export type _pyramid = Deep<"a">;
 //   branches: 4
 //   coverage: 4/8
 //   unknown: 0
+//   hits:
+//     L5: T=1 F=0
+//     L6: T=1 F=0
+//     L7: T=1 F=0
+//     L8: T=1 F=0
+//   traces:
+//     [0]: TTTT

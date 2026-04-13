@@ -28,6 +28,7 @@
 		"typecheck": "tsc --noEmit && tsc -p tests/tsconfig.json --noEmit",
 		"test": "pnpm run build && pnpm run build:tests && node --test dist-tests/tests/**/*.test.js",
 		"check-deps": "node scripts/check-deps.js",
+		"update-fixtures": "pnpm run build && pnpm run build:tests && node scripts/update-fixtures.mjs",
 		"ci": "pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run test && pnpm run check-deps"
 	},
 	"keywords": [

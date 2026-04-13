@@ -15,3 +15,11 @@ export type _e = Is<3>;
 //   branches: 1
 //   coverage: 2/2
 //   unknown: 0
+//   hits:
+//     L4: T=2 F=3
+//   traces:
+//     [0]: T
+//     [1]: T
+//     [2]: F
+//     [3]: F
+//     [4]: F

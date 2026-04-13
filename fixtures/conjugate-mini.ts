@@ -22,3 +22,10 @@ export type _hada_other = Conjugate<{ stem: "하"; form: "하다" }, "기본">;
 //   branches: 3
 //   coverage: 3/6
 //   unknown: 0
+//   hits:
+//     L8: T=2 F=0
+//     L9: T=1 F=1
+//     L12: unreached
+//   traces:
+//     [0]: TT
+//     [1]: TF
