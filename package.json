@@ -20,7 +20,7 @@
 		"dist/**/*.d.ts.map"
 	],
 	"scripts": {
-		"build": "tsc",
+		"build": "tsc && chmod +x dist/cli.js",
 		"build:tests": "tsc -p tests/tsconfig.json",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
