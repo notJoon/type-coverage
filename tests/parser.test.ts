@@ -127,7 +127,7 @@ type _t2 = Conjugate<"x", "y">;
 		assert.equal(result[0].name, "_t2");
 	});
 
-	it("finds only the first target reference per test alias", () => {
+	it("collects all target references per test alias", () => {
 		const code = `
 type Conjugate<V, F> = [V, F];
 type _t1 = [Conjugate<"a", "b">, Conjugate<"c", "d">];
@@ -135,10 +135,13 @@ type _t1 = [Conjugate<"a", "b">, Conjugate<"c", "d">];
 		const { sourceFile, checker } = makeProgram(code);
 		const result = collectInstantiations(sourceFile, "Conjugate", checker);
 
-		assert.equal(result.length, 1);
+		assert.equal(result.length, 2);
 		assert.equal(result[0].name, "_t1");
+		assert.equal(result[1].name, "_t1");
 		assert.equal(checker.typeToString(result[0].typeArgs[0]), `"a"`);
 		assert.equal(checker.typeToString(result[0].typeArgs[1]), `"b"`);
+		assert.equal(checker.typeToString(result[1].typeArgs[0]), `"c"`);
+		assert.equal(checker.typeToString(result[1].typeArgs[1]), `"d"`);
 	});
 
 	it("supports target reference nested deeply in generic arguments", () => {

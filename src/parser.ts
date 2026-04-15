@@ -7,10 +7,11 @@ export interface TargetInstantiation {
 	line: number;
 }
 
-function findFirstTargetRef(
+function collectTargetRefs(
 	node: ts.Node,
 	targetTypeName: string,
-): ts.TypeReferenceNode | undefined {
+	out: ts.TypeReferenceNode[],
+): void {
 	if (
 		ts.isTypeReferenceNode(node) &&
 		ts.isIdentifier(node.typeName) &&
@@ -18,10 +19,10 @@ function findFirstTargetRef(
 		node.typeArguments &&
 		node.typeArguments.length > 0
 	) {
-		return node;
+		out.push(node);
 	}
-	return ts.forEachChild(node, (child) =>
-		findFirstTargetRef(child, targetTypeName),
+	ts.forEachChild(node, (child) =>
+		collectTargetRefs(child, targetTypeName, out),
 	);
 }
 
@@ -36,24 +37,30 @@ export function collectInstantiations(
 		if (!ts.isTypeAliasDeclaration(node)) {
 			continue;
 		}
-		const ref = findFirstTargetRef(node.type, targetTypeName);
-		if (!ref?.typeArguments) {
+		const refs: ts.TypeReferenceNode[] = [];
+		collectTargetRefs(node.type, targetTypeName, refs);
+		if (refs.length === 0) {
 			continue;
 		}
 
-		const typeArgs = ref.typeArguments.map((arg) =>
-			checker.getTypeFromTypeNode(arg),
-		);
-		const line =
-			sourceFile.getLineAndCharacterOfPosition(ref.getStart(sourceFile)).line +
-			1;
+		for (const ref of refs) {
+			if (!ref.typeArguments) {
+				continue;
+			}
+			const typeArgs = ref.typeArguments.map((arg) =>
+				checker.getTypeFromTypeNode(arg),
+			);
+			const line =
+				sourceFile.getLineAndCharacterOfPosition(ref.getStart(sourceFile))
+					.line + 1;
 
-		instantiations.push({
-			name: node.name.text,
-			targetTypeName,
-			typeArgs,
-			line,
-		});
+			instantiations.push({
+				name: node.name.text,
+				targetTypeName,
+				typeArgs,
+				line,
+			});
+		}
 	}
 
 	return instantiations;
