@@ -4,7 +4,7 @@
 //
 //   Project mode — trace branches in a real TS project:
 //     node scripts/run.mjs \
-//       --project <tsconfig.json> --target <TypeName> --tests <test-file.ts>
+//       --project <tsconfig.json> --target <TypeName> --tests <file-or-glob>
 //
 //   Fixture mode — run against a self-contained fixture file that defines
 //   both the target type and its instantiation aliases:
@@ -29,7 +29,8 @@ const { values } = parseArgs({
 	options: {
 		project: { type: "string", short: "p" },
 		target: { type: "string", short: "t" },
-		tests: { type: "string" },
+		tests: { type: "string", multiple: true },
+		"target-file": { type: "string" },
 		fixture: { type: "string", short: "f" },
 		color: { type: "boolean", default: true },
 		"tab-width": { type: "string" },
@@ -54,7 +55,7 @@ if (values.fixture) {
 if (!values.project || !values.tests) {
 	console.error(
 		"Usage:\n" +
-			"  Project: --project <tsconfig.json> --target <TypeName> --tests <test-file.ts>\n" +
+			"  Project: --project <tsconfig.json> --target <TypeName> --tests <file-or-glob> [--tests <file-or-glob>] [--target-file <source-file.ts>]\n" +
 			"  Fixture: --fixture <path.ts> --target <TypeName>",
 	);
 	process.exit(2);
@@ -66,7 +67,8 @@ function runInProjectMode() {
 	const result = runProject({
 		tsconfigPath: values.project,
 		targetTypeName: values.target,
-		testFilePath: values.tests,
+		testFilePaths: values.tests,
+		targetFilePath: values["target-file"],
 		onWarn: (msg) => console.warn(`warning: ${msg}`),
 	});
 	console.log(

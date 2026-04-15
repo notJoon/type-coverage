@@ -1,16 +1,22 @@
 import path from "node:path";
 import ts from "typescript";
 import type { BranchHitCounts } from "./annotate.js";
+import { collectTestSourceFiles } from "./fs.js";
 import { collectInstantiations, type TargetInstantiation } from "./parser.js";
 import { type BranchPoint, collectBranches } from "./scanner.js";
-import { type TraceResult, traceConditionalChain } from "./tracer.js";
+import {
+	type TraceResult,
+	traceConditionalChain,
+	type UnknownReason,
+} from "./tracer.js";
 
-export type { BranchPoint, TargetInstantiation, TraceResult };
+export type { BranchPoint, TargetInstantiation, TraceResult, UnknownReason };
 
 export interface ProjectRunOptions {
 	tsconfigPath: string;
 	targetTypeName: string;
-	testFilePath: string;
+	testFilePaths: string[];
+	targetFilePath?: string;
 	/** Called with a short human-readable message when a recoverable issue occurs. */
 	onWarn?: (message: string) => void;
 }
@@ -20,6 +26,7 @@ export interface CoverageSummary {
 	covered: number;
 	unknown: number;
 	pct: number;
+	unknownByReason: Partial<Record<UnknownReason, number>>;
 }
 
 export interface ProjectRunResult {
@@ -38,6 +45,7 @@ export interface ProjectRunResult {
 export function summarize(
 	branches: BranchPoint[],
 	counts: Map<string, BranchHitCounts>,
+	unknownByReason: Partial<Record<UnknownReason, number>> = {},
 ): CoverageSummary {
 	let total = 0;
 	let covered = 0;
@@ -54,7 +62,7 @@ export function summarize(
 		unknown += h?.unknownHits ?? 0;
 	}
 	const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
-	return { total, covered, unknown, pct };
+	return { total, covered, unknown, pct, unknownByReason };
 }
 
 export class ProjectRunError extends Error {}
@@ -69,9 +77,21 @@ interface TargetAlias {
 function findTargetAlias(
 	program: ts.Program,
 	name: string,
-): TargetAlias | undefined {
+	targetFilePath?: string,
+): TargetAlias[] {
+	const normalizedTargetFile = targetFilePath
+		? path.resolve(targetFilePath)
+		: undefined;
+	const matches: TargetAlias[] = [];
+
 	for (const sf of program.getSourceFiles()) {
 		if (sf.isDeclarationFile) {
+			continue;
+		}
+		if (
+			normalizedTargetFile &&
+			path.resolve(sf.fileName) !== normalizedTargetFile
+		) {
 			continue;
 		}
 		for (const node of sf.statements) {
@@ -80,16 +100,16 @@ function findTargetAlias(
 				node.name.text === name &&
 				ts.isConditionalTypeNode(node.type)
 			) {
-				return {
+				matches.push({
 					alias: node,
 					sourceFile: sf,
 					conditional: node.type,
 					paramNames: (node.typeParameters ?? []).map((p) => p.name.text),
-				};
+				});
 			}
 		}
 	}
-	return undefined;
+	return matches;
 }
 
 function emptyCounts(): BranchHitCounts {
@@ -115,7 +135,6 @@ function bumpCount(counts: BranchHitCounts, taken: TraceResult["taken"]): void {
 export function runProject(options: ProjectRunOptions): ProjectRunResult {
 	const tsconfigPath = path.resolve(options.tsconfigPath);
 	const projectRoot = path.dirname(tsconfigPath);
-	const testFilePath = path.resolve(options.testFilePath);
 	const warn = options.onWarn ?? (() => {});
 
 	const { config, error } = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
@@ -133,32 +152,55 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 	const program = ts.createProgram(fileNames, compilerOptions);
 	const checker = program.getTypeChecker();
 
-	const target = findTargetAlias(program, options.targetTypeName);
-	if (!target) {
+	const targets = findTargetAlias(
+		program,
+		options.targetTypeName,
+		options.targetFilePath,
+	);
+	if (targets.length === 0) {
 		throw new ProjectRunError(
 			`Target type "${options.targetTypeName}" (conditional type alias) not found in project`,
 		);
 	}
-
-	const testSourceFile = program.getSourceFile(testFilePath);
-	if (!testSourceFile) {
+	if (targets.length > 1) {
+		const files = [
+			...new Set(
+				targets.map((t) => path.relative(projectRoot, t.sourceFile.fileName)),
+			),
+		].join(", ");
 		throw new ProjectRunError(
-			`Test file not found in program: ${testFilePath}\nHint: make sure the test file is included by the tsconfig's \`include\`.`,
+			`Target type "${options.targetTypeName}" is ambiguous across files: ${files}\nHint: provide --target-file to disambiguate.`,
 		);
 	}
+	const target = targets[0];
+
+	const testSourceCollection = collectTestSourceFiles(
+		program,
+		options.testFilePaths,
+		projectRoot,
+	);
+	for (const message of testSourceCollection.warnings) {
+		warn(message);
+	}
+	if (testSourceCollection.error) {
+		throw new ProjectRunError(testSourceCollection.error.message);
+	}
+	const testSourceFiles = testSourceCollection.sourceFiles;
 
 	const branches = collectBranches(target.sourceFile, projectRoot).filter(
 		(b) => b.typeName === options.targetTypeName,
 	);
 
-	const instantiations = collectInstantiations(
-		testSourceFile,
-		options.targetTypeName,
-		checker,
-	);
+	const instantiations: TargetInstantiation[] = [];
+	for (const testSourceFile of testSourceFiles) {
+		instantiations.push(
+			...collectInstantiations(testSourceFile, options.targetTypeName, checker),
+		);
+	}
 
 	const traces: TraceResult[][] = [];
 	const counts = new Map<string, BranchHitCounts>();
+	const unknownByReason: Partial<Record<UnknownReason, number>> = {};
 
 	for (const inst of instantiations) {
 		if (inst.typeArgs.length !== target.paramNames.length) {
@@ -187,6 +229,10 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 				counts.set(step.branchId, entry);
 			}
 			bumpCount(entry, step.taken);
+			if (step.taken === "unknown" && step.unknownReason) {
+				unknownByReason[step.unknownReason] =
+					(unknownByReason[step.unknownReason] ?? 0) + 1;
+			}
 		}
 	}
 
@@ -199,7 +245,7 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 		instantiations,
 		traces,
 		counts,
-		summary: summarize(branches, counts),
+		summary: summarize(branches, counts, unknownByReason),
 		projectRoot,
 	};
 }
