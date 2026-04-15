@@ -50,5 +50,10 @@ export function renderProjectReport(
 		"",
 		`Direction coverage: ${summary.covered}/${summary.total} (${summary.pct}%), unknown evaluations: ${summary.unknown}`,
 	];
+	const unknownReasons = Object.entries(summary.unknownByReason);
+	if (unknownReasons.length > 0) {
+		const parts = unknownReasons.map(([reason, count]) => `${reason}=${count}`);
+		lines.push(`Unknown reasons: ${parts.join(", ")}`);
+	}
 	return lines.join("\n");
 }

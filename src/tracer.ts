@@ -4,9 +4,15 @@ import ts from "typescript";
 export interface TraceResult {
 	branchId: string;
 	taken: "true" | "false" | "unknown";
+	unknownReason?: UnknownReason;
 }
 
 type IsTypeAssignableTo = (source: ts.Type, target: ts.Type) => boolean;
+export type UnknownReason =
+	| "checkTypeNotDirectParam"
+	| "missingTypeArg"
+	| "inferInExtends"
+	| "extendsTypeResolutionFailed";
 
 function getIsTypeAssignableTo(checker: ts.TypeChecker): IsTypeAssignableTo {
 	const fn = (checker as unknown as { isTypeAssignableTo?: IsTypeAssignableTo })
@@ -45,17 +51,22 @@ function computeBranchId(
 function resolveCheckType(
 	condNode: ts.ConditionalTypeNode,
 	paramMap: Map<string, ts.Type>,
-): ts.Type | null {
+):
+	| { type: ts.Type; unknownReason?: never }
+	| { type: null; unknownReason: UnknownReason } {
 	const checkNode = condNode.checkType;
 	if (
 		!ts.isTypeReferenceNode(checkNode) ||
 		!ts.isIdentifier(checkNode.typeName) ||
 		checkNode.typeArguments !== undefined
 	) {
-		return null;
+		return { type: null, unknownReason: "checkTypeNotDirectParam" };
 	}
-
-	return paramMap.get(checkNode.typeName.text) ?? null;
+	const type = paramMap.get(checkNode.typeName.text);
+	if (!type) {
+		return { type: null, unknownReason: "missingTypeArg" };
+	}
+	return { type };
 }
 
 function containsInfer(node: ts.Node): boolean {
@@ -69,15 +80,17 @@ function containsInfer(node: ts.Node): boolean {
 function resolveExtendsType(
 	condNode: ts.ConditionalTypeNode,
 	checker: ts.TypeChecker,
-): ts.Type | null {
+):
+	| { type: ts.Type; unknownReason?: never }
+	| { type: null; unknownReason: UnknownReason } {
 	if (containsInfer(condNode.extendsType)) {
-		return null;
+		return { type: null, unknownReason: "inferInExtends" };
 	}
 
 	try {
-		return checker.getTypeFromTypeNode(condNode.extendsType);
+		return { type: checker.getTypeFromTypeNode(condNode.extendsType) };
 	} catch {
-		return null;
+		return { type: null, unknownReason: "extendsTypeResolutionFailed" };
 	}
 }
 
@@ -93,15 +106,23 @@ export function traceConditionalChain(
 
 	function step(node: ts.ConditionalTypeNode): void {
 		const branchId = computeBranchId(node, sourceFile, projectRoot);
-		const checkType = resolveCheckType(node, paramMap);
-		const extendsType = resolveExtendsType(node, checker);
+		const checkResolved = resolveCheckType(node, paramMap);
+		const extendsResolved = resolveExtendsType(node, checker);
 
-		if (!checkType || !extendsType) {
-			results.push({ branchId, taken: "unknown" });
+		if (!checkResolved.type || !extendsResolved.type) {
+			results.push({
+				branchId,
+				taken: "unknown",
+				unknownReason:
+					checkResolved.unknownReason ?? extendsResolved.unknownReason,
+			});
 			return;
 		}
 
-		const assignable = isTypeAssignableTo(checkType, extendsType);
+		const assignable = isTypeAssignableTo(
+			checkResolved.type,
+			extendsResolved.type,
+		);
 		results.push({ branchId, taken: assignable ? "true" : "false" });
 
 		const next = assignable ? node.trueType : node.falseType;

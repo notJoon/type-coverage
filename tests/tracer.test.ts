@@ -204,6 +204,7 @@ type _arg = Promise<string>;
 		const result = traceConditionalChain(cond, paramMap, sourceFile, checker);
 		assert.equal(result.length, 1);
 		assert.equal(result[0].taken, "unknown");
+		assert.equal(result[0].unknownReason, "inferInExtends");
 	});
 
 	it("returns unknown for computed check type with substituted params", () => {
@@ -221,6 +222,24 @@ type _arg = "hi";
 		const result = traceConditionalChain(cond, paramMap, sourceFile, checker);
 		assert.equal(result.length, 1);
 		assert.equal(result[0].taken, "unknown");
+		assert.equal(result[0].unknownReason, "checkTypeNotDirectParam");
+	});
+
+	it("returns unknown when a referenced type parameter has no mapped argument", () => {
+		const code = `
+type Pair<X, Y> = Y extends string ? 1 : 0;
+type _x = 42;
+`;
+		const { sourceFile, checker } = makeProgram(code);
+		const cond = findConditional(sourceFile, "Pair");
+		const paramMap = new Map<string, ts.Type>([
+			["X", lookupTestArg(sourceFile, checker, "_x")],
+		]);
+
+		const result = traceConditionalChain(cond, paramMap, sourceFile, checker);
+		assert.equal(result.length, 1);
+		assert.equal(result[0].taken, "unknown");
+		assert.equal(result[0].unknownReason, "missingTypeArg");
 	});
 
 	it("branchId matches scanner id format (file:line:column)", () => {
