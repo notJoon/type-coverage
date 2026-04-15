@@ -1,4 +1,5 @@
 import { styleText } from "node:util";
+import ts from "typescript";
 import type { BranchPoint } from "./scanner.js";
 
 export interface BranchHitCounts {
@@ -45,6 +46,65 @@ interface PlacedMarker {
 	text: string;
 }
 
+function findParentBranch(
+	branch: BranchPoint,
+	byNode: Map<ts.Node, BranchPoint>,
+): BranchPoint | undefined {
+	for (let current = branch.node.parent; current; current = current.parent) {
+		if (!ts.isConditionalTypeNode(current)) {
+			continue;
+		}
+		const parent = byNode.get(current);
+		if (parent) {
+			return parent;
+		}
+	}
+	return undefined;
+}
+
+function hasMissedDirectionMarkerOnLine(
+	branch: BranchPoint,
+	counts: BranchHitCounts | undefined,
+	line: number,
+): boolean {
+	if (!counts) {
+		return false;
+	}
+	const { trueHits, falseHits, unknownHits } = counts;
+	// unknown-only branches are shown as a single consolidated marker and never
+	// emit split MISS markers.
+	if (unknownHits > 0 && trueHits === 0 && falseHits === 0) {
+		return false;
+	}
+	const missedTrue = trueHits === 0 && line === branch.trueLine;
+	const missedFalse = falseHits === 0 && line === branch.falseLine;
+	return missedTrue || missedFalse;
+}
+
+function shouldSuppressUnreached(
+	branch: BranchPoint,
+	counts: Map<string, BranchHitCounts>,
+	branchesByNode: Map<ts.Node, BranchPoint>,
+): boolean {
+	if (counts.has(branch.id)) {
+		return false;
+	}
+	let current = findParentBranch(branch, branchesByNode);
+	while (current) {
+		if (
+			hasMissedDirectionMarkerOnLine(
+				current,
+				counts.get(current.id),
+				branch.line,
+			)
+		) {
+			return true;
+		}
+		current = findParentBranch(current, branchesByNode);
+	}
+	return false;
+}
+
 /**
  * Compute the marker(s) for a branch and the line each should appear on.
  *
@@ -60,11 +120,6 @@ function placeMarkers(
 	colorize: Colorize,
 	showCounts: boolean,
 ): PlacedMarker[] {
-	// TODO: suppress this `⦸ unreached` marker when the branch is nested
-	// inside a parent direction that was already reported as missed (✗ MISS).
-	// The unreached badge then duplicates information already conveyed by the
-	// parent's MISS marker on the same line — see e.g. conjugate-mini.ts L12
-	// where `✗ MISS F` and `⦸ unreached` collide.
 	if (!counts) {
 		return [{ line: branch.line, text: colorize(MUTED_STYLE, "⦸ unreached") }];
 	}
@@ -225,7 +280,11 @@ export function renderAnnotated(
 	// Place each branch's markers on the appropriate line(s); group by line so
 	// multiple markers landing on the same line get joined.
 	const markersByLine = new Map<number, string[]>();
+	const branchesByNode = new Map(branches.map((b) => [b.node, b]));
 	for (const branch of branches) {
+		if (shouldSuppressUnreached(branch, hits, branchesByNode)) {
+			continue;
+		}
 		const placed = placeMarkers(
 			branch,
 			hits.get(branch.id),
