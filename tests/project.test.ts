@@ -35,8 +35,8 @@ describe("runProject", () => {
 				include: ["src/**/*.ts", "tests/**/*.ts"],
 			}),
 			"src/types.ts": `export type IsString<T> = T extends string ? 1 : 0;`,
-			"tests/a.test.ts": `type _a = IsString<"x">;`,
-			"tests/b.test.ts": `type _b = IsString<42>;`,
+			"tests/a.test.ts": `import type { IsString } from "../src/types"; type _a = IsString<"x">;`,
+			"tests/b.test.ts": `import type { IsString } from "../src/types"; type _b = IsString<42>;`,
 		});
 
 		const result = runProject({
@@ -57,8 +57,8 @@ describe("runProject", () => {
 				include: ["src/**/*.ts", "tests/**/*.ts"],
 			}),
 			"src/types.ts": `export type IsString<T> = T extends string ? 1 : 0;`,
-			"tests/a.test.ts": `type _a = IsString<"x">;`,
-			"tests/b.test.ts": `type _b = IsString<42>;`,
+			"tests/a.test.ts": `import type { IsString } from "../src/types"; type _a = IsString<"x">;`,
+			"tests/b.test.ts": `import type { IsString } from "../src/types"; type _b = IsString<42>;`,
 		});
 
 		const result = runProject({
@@ -78,7 +78,7 @@ describe("runProject", () => {
 			}),
 			"src/a.ts": `export type Dup<T> = T extends string ? 1 : 0;`,
 			"src/b.ts": `export type Dup<T> = T extends number ? 1 : 0;`,
-			"tests/t.test.ts": `type _t = Dup<"x">;`,
+			"tests/t.test.ts": `import type { Dup } from "../src/a"; type _t = Dup<"x">;`,
 		});
 
 		assert.throws(
@@ -103,7 +103,7 @@ describe("runProject", () => {
 			}),
 			"src/a.ts": `export type Dup<T> = T extends string ? 1 : 0;`,
 			"src/b.ts": `export type Dup<T> = T extends number ? 1 : 0;`,
-			"tests/t.test.ts": `type _t = Dup<"x">;`,
+			"tests/t.test.ts": `import type { Dup } from "../src/a"; type _t = Dup<"x">;`,
 		});
 
 		const result = runProject({
@@ -138,5 +138,34 @@ describe("runProject", () => {
 				err instanceof ProjectRunError &&
 				/no test files matched/i.test(err.message),
 		);
+	});
+
+	it("counts only references that resolve to the target symbol when names collide", () => {
+		const { root, tsconfigPath } = makeTempProject({
+			"tsconfig.json": JSON.stringify({
+				compilerOptions: { strict: true, noLib: true },
+				include: ["src/**/*.ts", "tests/**/*.ts"],
+			}),
+			"src/types.ts": `export type IsString<T> = T extends string ? 1 : 0;`,
+			"tests/a.test.ts": `
+import type { IsString } from "../src/types";
+type _a = IsString<"x">;
+namespace Shadow {
+	type IsString<T> = T extends number ? 1 : 0;
+	type _shadow = IsString<"x">;
+}
+`,
+		});
+
+		const result = runProject({
+			tsconfigPath,
+			targetTypeName: "IsString",
+			testFilePaths: [path.join(root, "tests", "a.test.ts")],
+		});
+
+		assert.equal(result.instantiations.length, 1);
+		assert.equal(result.summary.total, 2);
+		assert.equal(result.summary.covered, 1);
+		assert.equal(result.summary.unknown, 0);
 	});
 });

@@ -4,6 +4,7 @@ import type { BranchHitCounts } from "./annotate.js";
 import { collectTestSourceFiles } from "./fs.js";
 import { collectInstantiations, type TargetInstantiation } from "./parser.js";
 import { type BranchPoint, collectBranches } from "./scanner.js";
+import { canonicalSymbol } from "./symbol.js";
 import {
 	type TraceResult,
 	traceConditionalChain,
@@ -173,6 +174,15 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 		);
 	}
 	const target = targets[0];
+	const targetSymbol = canonicalSymbol(
+		checker.getSymbolAtLocation(target.alias.name),
+		checker,
+	);
+	if (!targetSymbol) {
+		throw new ProjectRunError(
+			`Failed to resolve target symbol for "${options.targetTypeName}"`,
+		);
+	}
 
 	const testSourceCollection = collectTestSourceFiles(
 		program,
@@ -187,14 +197,23 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 	}
 	const testSourceFiles = testSourceCollection.sourceFiles;
 
+	const targetStart = target.alias.type.getStart(target.sourceFile);
+	const targetEnd = target.alias.type.getEnd();
 	const branches = collectBranches(target.sourceFile, projectRoot).filter(
-		(b) => b.typeName === options.targetTypeName,
+		(b) =>
+			b.node.getStart(target.sourceFile) >= targetStart &&
+			b.node.getEnd() <= targetEnd,
 	);
 
 	const instantiations: TargetInstantiation[] = [];
 	for (const testSourceFile of testSourceFiles) {
 		instantiations.push(
-			...collectInstantiations(testSourceFile, options.targetTypeName, checker),
+			...collectInstantiations(
+				testSourceFile,
+				options.targetTypeName,
+				checker,
+				targetSymbol,
+			),
 		);
 	}
 

@@ -4,6 +4,7 @@ import ts from "typescript";
 import type { BranchHitCounts } from "./annotate.js";
 import { collectInstantiations, type TargetInstantiation } from "./parser.js";
 import { type BranchPoint, collectBranches } from "./scanner.js";
+import { canonicalSymbol } from "./symbol.js";
 import { type TraceResult, traceConditionalChain } from "./tracer.js";
 
 export type { BranchPoint, TargetInstantiation, TraceResult };
@@ -17,6 +18,7 @@ export interface FixtureRunResult {
 }
 
 interface TargetAlias {
+	alias: ts.TypeAliasDeclaration;
 	cond: ts.ConditionalTypeNode;
 	paramNames: string[];
 }
@@ -32,6 +34,7 @@ function findTargetAlias(
 			ts.isConditionalTypeNode(node.type)
 		) {
 			return {
+				alias: node,
 				cond: node.type,
 				paramNames: (node.typeParameters ?? []).map((p) => p.name.text),
 			};
@@ -103,21 +106,32 @@ export function runFixture(
 	const code = fs.readFileSync(absolute, "utf8");
 	const { sourceFile, checker } = makeFixtureProgram(absolute, code);
 
-	const branches = collectBranches(sourceFile).filter(
-		(b) => b.typeName === targetTypeName,
-	);
-
 	const target = findTargetAlias(sourceFile, targetTypeName);
 	if (!target) {
 		throw new Error(
 			`target conditional type "${targetTypeName}" not found in ${fixturePath}`,
 		);
 	}
+	const targetSymbol = canonicalSymbol(
+		checker.getSymbolAtLocation(target.alias.name),
+		checker,
+	);
+	if (!targetSymbol) {
+		throw new Error(`failed to resolve target symbol "${targetTypeName}"`);
+	}
+	const targetStart = target.alias.type.getStart(sourceFile);
+	const targetEnd = target.alias.type.getEnd();
+	const branches = collectBranches(sourceFile).filter(
+		(b) =>
+			b.node.getStart(sourceFile) >= targetStart &&
+			b.node.getEnd() <= targetEnd,
+	);
 
 	const instantiations = collectInstantiations(
 		sourceFile,
 		targetTypeName,
 		checker,
+		targetSymbol,
 	);
 	const traces: TraceResult[][] = [];
 	const counts = new Map<string, BranchHitCounts>();

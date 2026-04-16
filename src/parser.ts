@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { canonicalSymbol, getTypeReferenceSymbol } from "./symbol.js";
 
 export interface TargetInstantiation {
 	name: string;
@@ -10,19 +11,28 @@ export interface TargetInstantiation {
 function collectTargetRefs(
 	node: ts.Node,
 	targetTypeName: string,
+	targetSymbol: ts.Symbol | undefined,
+	checker: ts.TypeChecker,
 	out: ts.TypeReferenceNode[],
 ): void {
-	if (
-		ts.isTypeReferenceNode(node) &&
-		ts.isIdentifier(node.typeName) &&
-		node.typeName.text === targetTypeName &&
-		node.typeArguments &&
-		node.typeArguments.length > 0
-	) {
-		out.push(node);
+	if (ts.isTypeReferenceNode(node) && node.typeArguments?.length) {
+		const refSymbol = canonicalSymbol(
+			getTypeReferenceSymbol(node, checker),
+			checker,
+		);
+		if (targetSymbol) {
+			if (refSymbol === targetSymbol) {
+				out.push(node);
+			}
+		} else if (
+			ts.isIdentifier(node.typeName) &&
+			node.typeName.text === targetTypeName
+		) {
+			out.push(node);
+		}
 	}
 	ts.forEachChild(node, (child) =>
-		collectTargetRefs(child, targetTypeName, out),
+		collectTargetRefs(child, targetTypeName, targetSymbol, checker, out),
 	);
 }
 
@@ -30,15 +40,23 @@ export function collectInstantiations(
 	sourceFile: ts.SourceFile,
 	targetTypeName: string,
 	checker: ts.TypeChecker,
+	targetSymbol?: ts.Symbol,
 ): TargetInstantiation[] {
 	const instantiations: TargetInstantiation[] = [];
+	const canonicalTarget = canonicalSymbol(targetSymbol, checker);
 
 	for (const node of sourceFile.statements) {
 		if (!ts.isTypeAliasDeclaration(node)) {
 			continue;
 		}
 		const refs: ts.TypeReferenceNode[] = [];
-		collectTargetRefs(node.type, targetTypeName, refs);
+		collectTargetRefs(
+			node.type,
+			targetTypeName,
+			canonicalTarget,
+			checker,
+			refs,
+		);
 		if (refs.length === 0) {
 			continue;
 		}

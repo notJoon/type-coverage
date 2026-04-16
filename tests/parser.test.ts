@@ -35,6 +35,22 @@ function makeProgram(code: string): {
 	return { sourceFile, checker: program.getTypeChecker() };
 }
 
+function findTypeAliasSymbol(
+	sourceFile: ts.SourceFile,
+	checker: ts.TypeChecker,
+	name: string,
+): ts.Symbol {
+	for (const node of sourceFile.statements) {
+		if (ts.isTypeAliasDeclaration(node) && node.name.text === name) {
+			const symbol = checker.getSymbolAtLocation(node.name);
+			if (symbol) {
+				return symbol;
+			}
+		}
+	}
+	throw new Error(`type alias symbol not found: ${name}`);
+}
+
 describe("collectInstantiations", () => {
 	it("returns empty array for file with no target references", () => {
 		const { sourceFile, checker } = makeProgram(`type X = string;`);
@@ -166,5 +182,29 @@ type _t1 = Conjugate<"a", "b">;
 		const { sourceFile, checker } = makeProgram(code);
 		const result = collectInstantiations(sourceFile, "NonExistent", checker);
 		assert.equal(result.length, 0);
+	});
+
+	it("uses symbol identity to ignore same-name references to a different type", () => {
+		const code = `
+type Conjugate<V, F> = [V, F];
+type _t1 = Conjugate<"a", "b">;
+namespace Shadow {
+	type Conjugate<X, Y> = { x: X; y: Y };
+	type _t2 = Conjugate<1, 2>;
+}
+`;
+		const { sourceFile, checker } = makeProgram(code);
+		const targetSymbol = findTypeAliasSymbol(sourceFile, checker, "Conjugate");
+		const result = collectInstantiations(
+			sourceFile,
+			"Conjugate",
+			checker,
+			targetSymbol,
+		);
+
+		assert.equal(result.length, 1);
+		assert.equal(result[0].name, "_t1");
+		assert.equal(checker.typeToString(result[0].typeArgs[0]), `"a"`);
+		assert.equal(checker.typeToString(result[0].typeArgs[1]), `"b"`);
 	});
 });

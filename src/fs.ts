@@ -18,7 +18,10 @@ function looksLikeGlob(pattern: string): boolean {
 const canonicalizeFileName = (fileName: string): string =>
 	ts.sys.useCaseSensitiveFileNames ? fileName : fileName.toLowerCase();
 
-function resolveFromProjectRoot(inputPath: string, projectRoot: string): string {
+function resolveFromProjectRoot(
+	inputPath: string,
+	projectRoot: string,
+): string {
 	return path.normalize(
 		path.isAbsolute(inputPath)
 			? inputPath
@@ -141,8 +144,8 @@ export function collectTestSourceFiles(
 					warnings,
 					error: {
 						message: `Test file not found in program: ${abs}\nHint: make sure the file is included by the tsconfig's \`include\`.`,
-						},
-					};
+					},
+				};
 			}
 			selected.set(canonicalPath, sf);
 			continue;
