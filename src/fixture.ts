@@ -3,9 +3,13 @@ import path from "node:path";
 import ts from "typescript";
 import type { BranchHitCounts } from "./annotate.js";
 import { collectInstantiations, type TargetInstantiation } from "./parser.js";
-import { type BranchPoint, collectBranches } from "./scanner.js";
-import { canonicalSymbol } from "./symbol.js";
-import { type TraceResult, traceConditionalChain } from "./tracer.js";
+import type { BranchPoint } from "./scanner.js";
+import {
+	collectTargetBranches,
+	findConditionalTargetInSource,
+} from "./target.js";
+import { collectTraceCoverage } from "./trace-coverage.js";
+import type { TraceResult } from "./tracer.js";
 
 export type { BranchPoint, TargetInstantiation, TraceResult };
 
@@ -15,46 +19,6 @@ export interface FixtureRunResult {
 	instantiations: TargetInstantiation[];
 	traces: TraceResult[][];
 	counts: Map<string, BranchHitCounts>;
-}
-
-interface TargetAlias {
-	alias: ts.TypeAliasDeclaration;
-	cond: ts.ConditionalTypeNode;
-	paramNames: string[];
-}
-
-function findTargetAlias(
-	sourceFile: ts.SourceFile,
-	targetTypeName: string,
-): TargetAlias | undefined {
-	for (const node of sourceFile.statements) {
-		if (
-			ts.isTypeAliasDeclaration(node) &&
-			node.name.text === targetTypeName &&
-			ts.isConditionalTypeNode(node.type)
-		) {
-			return {
-				alias: node,
-				cond: node.type,
-				paramNames: (node.typeParameters ?? []).map((p) => p.name.text),
-			};
-		}
-	}
-	return undefined;
-}
-
-function emptyCounts(): BranchHitCounts {
-	return { trueHits: 0, falseHits: 0, unknownHits: 0 };
-}
-
-function bumpCount(counts: BranchHitCounts, taken: TraceResult["taken"]): void {
-	if (taken === "true") {
-		counts.trueHits++;
-	} else if (taken === "false") {
-		counts.falseHits++;
-	} else {
-		counts.unknownHits++;
-	}
 }
 
 function makeFixtureProgram(
@@ -106,56 +70,31 @@ export function runFixture(
 	const code = fs.readFileSync(absolute, "utf8");
 	const { sourceFile, checker } = makeFixtureProgram(absolute, code);
 
-	const target = findTargetAlias(sourceFile, targetTypeName);
+	const target = findConditionalTargetInSource(
+		sourceFile,
+		targetTypeName,
+		checker,
+	);
 	if (!target) {
 		throw new Error(
 			`target conditional type "${targetTypeName}" not found in ${fixturePath}`,
 		);
 	}
-	const targetSymbol = canonicalSymbol(
-		checker.getSymbolAtLocation(target.alias.name),
-		checker,
-	);
-	if (!targetSymbol) {
-		throw new Error(`failed to resolve target symbol "${targetTypeName}"`);
-	}
-	const targetStart = target.alias.type.getStart(sourceFile);
-	const targetEnd = target.alias.type.getEnd();
-	const branches = collectBranches(sourceFile).filter(
-		(b) =>
-			b.node.getStart(sourceFile) >= targetStart &&
-			b.node.getEnd() <= targetEnd,
-	);
+	const branches = collectTargetBranches(target);
 
 	const instantiations = collectInstantiations(
 		sourceFile,
 		targetTypeName,
 		checker,
-		targetSymbol,
+		target.symbol,
 	);
-	const traces: TraceResult[][] = [];
-	const counts = new Map<string, BranchHitCounts>();
-
-	for (const inst of instantiations) {
-		const paramMap = new Map<string, ts.Type>(
-			target.paramNames.map((name, i) => [name, inst.typeArgs[i]]),
-		);
-		const trace = traceConditionalChain(
-			target.cond,
-			paramMap,
-			sourceFile,
+	const { traces, counts } = collectTraceCoverage({
+		instantiations,
+		context: {
+			target,
 			checker,
-		);
-		traces.push(trace);
-		for (const step of trace) {
-			let entry = counts.get(step.branchId);
-			if (!entry) {
-				entry = emptyCounts();
-				counts.set(step.branchId, entry);
-			}
-			bumpCount(entry, step.taken);
-		}
-	}
+		},
+	});
 
 	return { sourceFile, branches, instantiations, traces, counts };
 }
