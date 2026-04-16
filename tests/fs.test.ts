@@ -58,7 +58,7 @@ describe("collectTestSourceFiles", () => {
 			root,
 		);
 
-		assert.equal(result.error, undefined);
+		assert.equal(result.ok, true);
 		assert.deepEqual(result.warnings, []);
 		assert.equal(result.sourceFiles.length, 2);
 		const basenames = result.sourceFiles
@@ -80,9 +80,9 @@ describe("collectTestSourceFiles", () => {
 		const missing = path.join(root, "tests", "missing.test.ts");
 		const result = collectTestSourceFiles(program, [missing], root);
 
+		assert.equal(result.ok, false);
 		assert.equal(result.sourceFiles.length, 0);
 		assert.equal(result.warnings.length, 0);
-		assert.ok(result.error);
 		assert.match(result.error.message, /Test file not found in program/);
 		assert.match(result.error.message, /make sure the file is included/);
 	});
@@ -99,11 +99,11 @@ describe("collectTestSourceFiles", () => {
 
 		const result = collectTestSourceFiles(program, ["tests/nope*.ts"], root);
 
+		assert.equal(result.ok, false);
 		assert.equal(result.sourceFiles.length, 0);
 		assert.deepEqual(result.warnings, [
 			"test pattern matched no files on disk: tests/nope*.ts",
 		]);
-		assert.ok(result.error);
 		assert.match(result.error.message, /No test files matched --tests patterns/);
 	});
 
@@ -120,7 +120,7 @@ describe("collectTestSourceFiles", () => {
 
 		const result = collectTestSourceFiles(program, ["tests/*.test.ts"], root);
 
-		assert.equal(result.error, undefined);
+		assert.equal(result.ok, true);
 		assert.deepEqual(result.warnings, []);
 		assert.equal(result.sourceFiles.length, 1);
 		assert.equal(path.basename(result.sourceFiles[0].fileName), "a.test.ts");
