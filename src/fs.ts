@@ -1,15 +1,18 @@
 import path from "node:path";
 import ts from "typescript";
 
-interface TestSourceFileCollectionError {
-	message: string;
-}
-
-export interface TestSourceFileCollectionResult {
-	sourceFiles: ts.SourceFile[];
-	warnings: string[];
-	error?: TestSourceFileCollectionError;
-}
+export type TestSourceFileCollectionResult =
+	| {
+			ok: true;
+			sourceFiles: ts.SourceFile[];
+			warnings: string[];
+	  }
+	| {
+			ok: false;
+			sourceFiles: [];
+			warnings: string[];
+			error: { message: string };
+	  };
 
 function looksLikeGlob(pattern: string): boolean {
 	return /[*?{}]/.test(pattern);
@@ -140,6 +143,7 @@ export function collectTestSourceFiles(
 			const sf = byAbsPath.get(canonicalPath);
 			if (!sf) {
 				return {
+					ok: false,
 					sourceFiles: [],
 					warnings,
 					error: {
@@ -177,6 +181,7 @@ export function collectTestSourceFiles(
 	const result = [...selected.values()];
 	if (result.length === 0) {
 		return {
+			ok: false,
 			sourceFiles: [],
 			warnings,
 			error: {
@@ -184,5 +189,5 @@ export function collectTestSourceFiles(
 			},
 		};
 	}
-	return { sourceFiles: result, warnings };
+	return { ok: true, sourceFiles: result, warnings };
 }

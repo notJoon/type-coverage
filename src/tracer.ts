@@ -1,11 +1,16 @@
 import path from "node:path";
 import ts from "typescript";
 
-export interface TraceResult {
-	branchId: string;
-	taken: "true" | "false" | "unknown";
-	unknownReason?: UnknownReason;
-}
+export type TraceResult =
+	| {
+			branchId: string;
+			taken: "true" | "false";
+	  }
+	| {
+			branchId: string;
+			taken: "unknown";
+			unknownReason: UnknownReason;
+	  };
 
 type IsTypeAssignableTo = (source: ts.Type, target: ts.Type) => boolean;
 export type UnknownReason =
@@ -110,11 +115,16 @@ export function traceConditionalChain(
 		const extendsResolved = resolveExtendsType(node, checker);
 
 		if (!checkResolved.type || !extendsResolved.type) {
+			const reason = checkResolved.type
+				? extendsResolved.unknownReason
+				: checkResolved.unknownReason;
+			if (!reason) {
+				throw new Error("unknown branch outcome missing reason");
+			}
 			results.push({
 				branchId,
 				taken: "unknown",
-				unknownReason:
-					checkResolved.unknownReason ?? extendsResolved.unknownReason,
+				unknownReason: reason,
 			});
 			return;
 		}
