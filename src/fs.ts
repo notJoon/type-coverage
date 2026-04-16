@@ -12,13 +12,38 @@ export interface TestSourceFileCollectionResult {
 }
 
 function looksLikeGlob(pattern: string): boolean {
-	return /[*?[\]{}()!+@]/.test(pattern);
+	return /[*?{}]/.test(pattern);
+}
+
+const canonicalizeFileName = (fileName: string): string =>
+	ts.sys.useCaseSensitiveFileNames ? fileName : fileName.toLowerCase();
+
+function resolveFromProjectRoot(inputPath: string, projectRoot: string): string {
+	return path.normalize(
+		path.isAbsolute(inputPath)
+			? inputPath
+			: path.resolve(projectRoot, inputPath),
+	);
+}
+
+function toCanonicalPath(filePath: string): string {
+	const resolved = path.resolve(filePath);
+	let realPath = resolved;
+	if (ts.sys.realpath) {
+		try {
+			realPath = ts.sys.realpath(resolved);
+		} catch {
+			realPath = resolved;
+		}
+	}
+	return canonicalizeFileName(path.normalize(realPath));
 }
 
 function normalizeIncludePattern(pattern: string, projectRoot: string): string {
-	const relative = path.isAbsolute(pattern)
-		? path.relative(projectRoot, pattern)
-		: pattern;
+	const relative = path.relative(
+		projectRoot,
+		resolveFromProjectRoot(pattern, projectRoot),
+	);
 	const normalized = relative.replaceAll("\\", "/");
 	return normalized.startsWith("./") ? normalized.slice(2) : normalized;
 }
@@ -90,11 +115,12 @@ export function collectTestSourceFiles(
 	testFilePaths: string[],
 	projectRoot: string,
 ): TestSourceFileCollectionResult {
+	const projectRootAbs = path.resolve(projectRoot);
 	const allSourceFiles = program
 		.getSourceFiles()
 		.filter((sf) => !sf.isDeclarationFile);
 	const byAbsPath = new Map<string, ts.SourceFile>(
-		allSourceFiles.map((sf) => [path.resolve(sf.fileName), sf]),
+		allSourceFiles.map((sf) => [toCanonicalPath(sf.fileName), sf]),
 	);
 	const selected = new Map<string, ts.SourceFile>();
 	const warnings: string[] = [];
@@ -106,32 +132,42 @@ export function collectTestSourceFiles(
 		}
 
 		if (!looksLikeGlob(pattern)) {
-			const abs = path.resolve(pattern);
-			const sf = byAbsPath.get(abs);
+			const abs = resolveFromProjectRoot(pattern, projectRootAbs);
+			const canonicalPath = toCanonicalPath(abs);
+			const sf = byAbsPath.get(canonicalPath);
 			if (!sf) {
 				return {
 					sourceFiles: [],
 					warnings,
 					error: {
 						message: `Test file not found in program: ${abs}\nHint: make sure the file is included by the tsconfig's \`include\`.`,
-					},
-				};
+						},
+					};
 			}
-			selected.set(abs, sf);
+			selected.set(canonicalPath, sf);
 			continue;
 		}
 
-		let matched = 0;
-		for (const matchedPath of matchProgramFilesByGlob(projectRoot, pattern)) {
-			const sf = byAbsPath.get(path.resolve(matchedPath));
+		const diskMatches = matchProgramFilesByGlob(projectRootAbs, pattern);
+		if (diskMatches.length === 0) {
+			warnings.push(`test pattern matched no files on disk: ${pattern}`);
+			continue;
+		}
+
+		let programMatched = 0;
+		for (const matchedPath of diskMatches) {
+			const canonicalPath = toCanonicalPath(matchedPath);
+			const sf = byAbsPath.get(canonicalPath);
 			if (!sf) {
 				continue;
 			}
-			matched++;
-			selected.set(path.resolve(matchedPath), sf);
+			programMatched++;
+			selected.set(canonicalPath, sf);
 		}
-		if (matched === 0) {
-			warnings.push(`test pattern matched no files: ${pattern}`);
+		if (programMatched === 0) {
+			warnings.push(
+				`test pattern matched files on disk, but none were included in the TypeScript program: ${pattern}`,
+			);
 		}
 	}
 
