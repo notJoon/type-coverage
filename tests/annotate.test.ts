@@ -305,4 +305,78 @@ type B = 2;`;
 		const ESC = String.fromCharCode(0x1b);
 		assert.ok(!out.includes(`${ESC}[`), "expected no ANSI escape in output");
 	});
+
+	it("renders only compact costs when profiling data is present", () => {
+		const code = `type Is<X> = X extends string ? 1 : 0;`;
+		const sf = parse(code);
+		const branches = collectBranches(sf);
+		const plain = new Map([[branches[0].id, hits(1, 0)]]);
+		const profiled = new Map([
+			[
+				branches[0].id,
+				{
+					...hits(1, 0),
+					cost: {
+						types: 4,
+						instantiations: 2,
+						relationChecks: 0,
+						ms: 1.25,
+					},
+				},
+			],
+		]);
+
+		assert.doesNotMatch(renderAnnotated(code, branches, plain), /marginal/);
+		const out = renderAnnotated(code, branches, profiled);
+		assert.match(out, /\+4 types · \+2 inst · ~1\.25ms/);
+		assert.doesNotMatch(out, /✓|MISS|marginal|rel/);
+	});
+
+	it("renders cost without an unknown marker for profiled unknown branches", () => {
+		const code = `type Is<X> = X extends infer U ? U : never;`;
+		const sf = parse(code);
+		const branches = collectBranches(sf);
+		const profiled = new Map([
+			[
+				branches[0].id,
+				{
+					...hits(0, 0, 1),
+					cost: {
+						types: 1,
+						instantiations: 0,
+						relationChecks: 0,
+						ms: 0.1,
+					},
+				},
+			],
+		]);
+
+		const out = renderAnnotated(code, branches, profiled);
+		assert.match(out, /\+1 types · \+0 inst · ~0\.10ms/);
+		assert.doesNotMatch(out, /unknown/);
+	});
+
+	it("keeps costs for multiple profiled branches on the same line", () => {
+		const code = `type T<X, Y> = X extends string ? 1 : Y extends number ? 2 : 3;`;
+		const sf = parse(code);
+		const branches = collectBranches(sf);
+		const profiled = new Map(
+			branches.map((branch, index) => [
+				branch.id,
+				{
+					...hits(1, 0),
+					cost: {
+						types: index + 1,
+						instantiations: 0,
+						relationChecks: 0,
+						ms: 0.1,
+					},
+				},
+			]),
+		);
+
+		const out = renderAnnotated(code, branches, profiled);
+		assert.match(out, /\+1 types/);
+		assert.match(out, /\+2 types/);
+	});
 });

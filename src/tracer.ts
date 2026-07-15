@@ -1,7 +1,15 @@
 import path from "node:path";
 import ts from "typescript";
+import {
+	addMarginalCosts,
+	type MarginalCost,
+	type TypeCheckerProfiler,
+} from "./profile.js";
 
-export type TraceResult =
+export type TraceResult = {
+	/** Marginal branch cost; the first result also includes type-argument resolution. */
+	cost?: MarginalCost;
+} & (
 	| {
 			branchId: string;
 			taken: "true" | "false";
@@ -10,7 +18,8 @@ export type TraceResult =
 			branchId: string;
 			taken: "unknown";
 			unknownReason: UnknownReason;
-	  };
+	  }
+);
 
 type IsTypeAssignableTo = (source: ts.Type, target: ts.Type) => boolean;
 export type UnknownReason =
@@ -105,6 +114,8 @@ export function traceConditionalChain(
 	sourceFile: ts.SourceFile,
 	checker: ts.TypeChecker,
 	projectRoot?: string,
+	profiler?: TypeCheckerProfiler,
+	initialCost?: MarginalCost,
 ): TraceResult[] {
 	const results: TraceResult[] = [];
 	const isTypeAssignableTo = getIsTypeAssignableTo(checker);
@@ -112,7 +123,22 @@ export function traceConditionalChain(
 	function step(node: ts.ConditionalTypeNode): void {
 		const branchId = computeBranchId(node, sourceFile, projectRoot);
 		const checkResolved = resolveCheckType(node, paramMap);
-		const extendsResolved = resolveExtendsType(node, checker);
+		const evaluate = () => {
+			const extendsResolved = resolveExtendsType(node, checker);
+			const assignable =
+				checkResolved.type && extendsResolved.type
+					? isTypeAssignableTo(checkResolved.type, extendsResolved.type)
+					: undefined;
+			return { extendsResolved, assignable };
+		};
+		const measured = profiler?.(evaluate);
+		const { extendsResolved, assignable } = measured?.value ?? evaluate();
+		const cost =
+			results.length === 0 && initialCost
+				? measured
+					? addMarginalCosts(initialCost, measured.cost)
+					: initialCost
+				: measured?.cost;
 
 		if (!checkResolved.type || !extendsResolved.type) {
 			const reason = checkResolved.type
@@ -125,15 +151,16 @@ export function traceConditionalChain(
 				branchId,
 				taken: "unknown",
 				unknownReason: reason,
+				...(cost ? { cost } : {}),
 			});
 			return;
 		}
 
-		const assignable = isTypeAssignableTo(
-			checkResolved.type,
-			extendsResolved.type,
-		);
-		results.push({ branchId, taken: assignable ? "true" : "false" });
+		results.push({
+			branchId,
+			taken: assignable ? "true" : "false",
+			...(cost ? { cost } : {}),
+		});
 
 		const next = assignable ? node.trueType : node.falseType;
 		if (ts.isConditionalTypeNode(next)) {

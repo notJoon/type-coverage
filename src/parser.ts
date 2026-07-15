@@ -1,4 +1,5 @@
 import ts from "typescript";
+import type { MarginalCost, TypeCheckerProfiler } from "./profile.js";
 import { canonicalSymbol, getTypeReferenceSymbol } from "./symbol.js";
 
 export interface TargetInstantiation {
@@ -6,6 +7,8 @@ export interface TargetInstantiation {
 	targetTypeName: string;
 	typeArgs: ts.Type[];
 	line: number;
+	/** Marginal cost of resolving this instantiation's type arguments. */
+	cost?: MarginalCost;
 }
 
 function collectTargetRefs(
@@ -41,6 +44,7 @@ export function collectInstantiations(
 	targetTypeName: string,
 	checker: ts.TypeChecker,
 	targetSymbol?: ts.Symbol,
+	profiler?: TypeCheckerProfiler,
 ): TargetInstantiation[] {
 	const instantiations: TargetInstantiation[] = [];
 	const canonicalTarget = canonicalSymbol(targetSymbol, checker);
@@ -65,9 +69,10 @@ export function collectInstantiations(
 			if (!ref.typeArguments) {
 				continue;
 			}
-			const typeArgs = ref.typeArguments.map((arg) =>
-				checker.getTypeFromTypeNode(arg),
-			);
+			const resolveTypeArgs = () =>
+				ref.typeArguments?.map((arg) => checker.getTypeFromTypeNode(arg)) ?? [];
+			const measured = profiler?.(resolveTypeArgs);
+			const typeArgs = measured?.value ?? resolveTypeArgs();
 			const line =
 				sourceFile.getLineAndCharacterOfPosition(ref.getStart(sourceFile))
 					.line + 1;
@@ -77,6 +82,7 @@ export function collectInstantiations(
 				targetTypeName,
 				typeArgs,
 				line,
+				...(measured ? { cost: measured.cost } : {}),
 			});
 		}
 	}

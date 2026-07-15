@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { ProjectRunError, runProject } from "../src/project.js";
+import { renderProjectReport } from "../src/report.js";
 
 const tempDirs: string[] = [];
 
@@ -28,6 +29,28 @@ function makeTempProject(files: Record<string, string>): {
 }
 
 describe("runProject", () => {
+	it("renders a cost-only report in profile mode", () => {
+		const { root, tsconfigPath } = makeTempProject({
+			"tsconfig.json": JSON.stringify({
+				compilerOptions: { strict: true, noLib: true },
+				include: ["src/**/*.ts", "tests/**/*.ts"],
+			}),
+			"src/types.ts": `export type IsString<T> = T extends string ? 1 : 0;`,
+			"tests/a.test.ts": `import type { IsString } from "../src/types"; type _a = IsString<"x">;`,
+		});
+		const result = runProject({
+			tsconfigPath,
+			targetTypeName: "IsString",
+			testFilePaths: [path.join(root, "tests", "a.test.ts")],
+			profile: true,
+		});
+
+		const report = renderProjectReport(result, "IsString");
+		assert.match(report, /\+[\d,]+ types · \+[\d,]+ inst · ~[\d.]+ms/);
+		assert.match(report, /first-touch marginal.*cache.*order dependent/i);
+		assert.doesNotMatch(report, /✓|MISS|Direction coverage/);
+	});
+
 	it("collects instantiations across multiple test files matched by glob", () => {
 		const { root, tsconfigPath } = makeTempProject({
 			"tsconfig.json": JSON.stringify({

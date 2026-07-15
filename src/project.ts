@@ -3,6 +3,7 @@ import ts from "typescript";
 import type { BranchHitCounts } from "./annotate.js";
 import { collectTestSourceFiles } from "./fs.js";
 import { collectInstantiations, type TargetInstantiation } from "./parser.js";
+import { createTypeCheckerProfiler } from "./profile.js";
 import type { BranchPoint } from "./scanner.js";
 import {
 	collectTargetBranches,
@@ -20,6 +21,7 @@ export interface ProjectRunOptions {
 	targetFilePath?: string;
 	/** Called with a short human-readable message when a recoverable issue occurs. */
 	onWarn?: (message: string) => void;
+	profile?: boolean;
 }
 
 export interface CoverageSummary {
@@ -93,6 +95,7 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 
 	const program = ts.createProgram(fileNames, compilerOptions);
 	const checker = program.getTypeChecker();
+	const profiler = createTypeCheckerProfiler(checker, options.profile ?? false);
 
 	const targets = findConditionalTargetsInProgram(
 		program,
@@ -140,6 +143,7 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 				options.targetTypeName,
 				checker,
 				target.symbol,
+				profiler,
 			),
 		);
 	}
@@ -150,6 +154,7 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 			target,
 			checker,
 			projectRoot,
+			profiler,
 		},
 		hooks: {
 			onArityMismatch: (inst, expectedTypeArgs) => {

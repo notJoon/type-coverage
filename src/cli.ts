@@ -9,7 +9,7 @@ import { ProjectRunError, runProject } from "./project.js";
 import { renderProjectReport } from "./report.js";
 
 const USAGE =
-	"Usage: type-coverage --project <tsconfig.json> --target <TypeName> --tests <file-or-glob> [--tests <file-or-glob>] [--target-file <source-file.ts>]";
+	"Usage: type-coverage --project <tsconfig.json> --target <TypeName> --tests <file-or-glob> [--tests <file-or-glob>] [--target-file <source-file.ts>] [--profile]";
 
 class UsageError extends Error {}
 
@@ -20,6 +20,7 @@ function parseCliArgs() {
 			target: { type: "string", short: "t" },
 			tests: { type: "string", multiple: true },
 			"target-file": { type: "string" },
+			profile: { type: "boolean", default: false },
 		},
 	});
 	if (!values.project || !values.target || !values.tests) {
@@ -30,6 +31,7 @@ function parseCliArgs() {
 		target: values.target,
 		tests: values.tests,
 		targetFile: values["target-file"],
+		profile: values.profile,
 	};
 }
 
@@ -40,6 +42,7 @@ function main(): void {
 		targetTypeName: args.target,
 		testFilePaths: args.tests,
 		targetFilePath: args.targetFile,
+		profile: args.profile,
 		onWarn: (msg) => console.warn(`warning: ${msg}`),
 	});
 	console.log(

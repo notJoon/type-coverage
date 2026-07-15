@@ -1,5 +1,6 @@
 import path from "node:path";
-import { renderAnnotated } from "./annotate.js";
+import { hasProfileCosts, renderAnnotated } from "./annotate.js";
+import { PROFILE_NOTE } from "./profile.js";
 import type { ProjectRunResult } from "./project.js";
 
 export interface RenderProjectReportOptions {
@@ -39,6 +40,7 @@ export function renderProjectReport(
 		tabWidth: options.tabWidth,
 	}).split("\n");
 	const slice = rendered.slice(startLine, endLine + 1);
+	const profiled = hasProfileCosts(counts);
 
 	const lines: string[] = [
 		"",
@@ -47,9 +49,15 @@ export function renderProjectReport(
 		`Instantiations analyzed: ${instantiations.length}`,
 		"",
 		slice.join("\n"),
+	];
+	if (profiled) {
+		lines.push("", PROFILE_NOTE);
+		return lines.join("\n");
+	}
+	lines.push(
 		"",
 		`Direction coverage: ${summary.covered}/${summary.total} (${summary.pct}%), unknown evaluations: ${summary.unknown}`,
-	];
+	);
 	const unknownReasons = Object.entries(summary.unknownByReason);
 	if (unknownReasons.length > 0) {
 		const parts = unknownReasons.map(([reason, count]) => `${reason}=${count}`);

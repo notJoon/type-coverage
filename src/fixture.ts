@@ -3,6 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 import type { BranchHitCounts } from "./annotate.js";
 import { collectInstantiations, type TargetInstantiation } from "./parser.js";
+import { createTypeCheckerProfiler } from "./profile.js";
 import type { BranchPoint } from "./scanner.js";
 import {
 	collectTargetBranches,
@@ -19,6 +20,10 @@ export interface FixtureRunResult {
 	instantiations: TargetInstantiation[];
 	traces: TraceResult[][];
 	counts: Map<string, BranchHitCounts>;
+}
+
+export interface FixtureRunOptions {
+	profile?: boolean;
 }
 
 function makeFixtureProgram(
@@ -65,6 +70,7 @@ function makeFixtureProgram(
 export function runFixture(
 	fixturePath: string,
 	targetTypeName: string,
+	options: FixtureRunOptions = {},
 ): FixtureRunResult {
 	const absolute = path.resolve(fixturePath);
 	const code = fs.readFileSync(absolute, "utf8");
@@ -81,18 +87,21 @@ export function runFixture(
 		);
 	}
 	const branches = collectTargetBranches(target);
+	const profiler = createTypeCheckerProfiler(checker, options.profile ?? false);
 
 	const instantiations = collectInstantiations(
 		sourceFile,
 		targetTypeName,
 		checker,
 		target.symbol,
+		profiler,
 	);
 	const { traces, counts } = collectTraceCoverage({
 		instantiations,
 		context: {
 			target,
 			checker,
+			profiler,
 		},
 	});
 

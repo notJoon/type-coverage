@@ -16,8 +16,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { renderAnnotated } from "../dist/annotate.js";
+import { hasProfileCosts, renderAnnotated } from "../dist/annotate.js";
 import { runFixture } from "../dist/fixture.js";
+import { PROFILE_NOTE } from "../dist/profile.js";
 import { runProject, summarize } from "../dist/project.js";
 import { renderProjectReport } from "../dist/report.js";
 import {
@@ -35,6 +36,7 @@ const { values } = parseArgs({
 		color: { type: "boolean", default: true },
 		"tab-width": { type: "string" },
 		"update-test": { type: "boolean", default: false },
+		profile: { type: "boolean", default: false },
 	},
 });
 
@@ -55,8 +57,8 @@ if (values.fixture) {
 if (!values.project || !values.tests) {
 	console.error(
 		"Usage:\n" +
-			"  Project: --project <tsconfig.json> --target <TypeName> --tests <file-or-glob> [--tests <file-or-glob>] [--target-file <source-file.ts>]\n" +
-			"  Fixture: --fixture <path.ts> --target <TypeName>",
+			"  Project: --project <tsconfig.json> --target <TypeName> --tests <file-or-glob> [--tests <file-or-glob>] [--target-file <source-file.ts>] [--profile]\n" +
+			"  Fixture: --fixture <path.ts> --target <TypeName> [--profile]",
 	);
 	process.exit(2);
 }
@@ -69,6 +71,7 @@ function runInProjectMode() {
 		targetTypeName: values.target,
 		testFilePaths: values.tests,
 		targetFilePath: values["target-file"],
+		profile: values.profile,
 		onWarn: (msg) => console.warn(`warning: ${msg}`),
 	});
 	console.log(
@@ -81,7 +84,9 @@ function runInProjectMode() {
 
 function runInFixtureMode() {
 	const fixturePath = path.resolve(values.fixture);
-	const result = runFixture(fixturePath, values.target);
+	const result = runFixture(fixturePath, values.target, {
+		profile: values.profile,
+	});
 
 	if (values["update-test"]) {
 		const original = fs.readFileSync(fixturePath, "utf8");
@@ -111,8 +116,12 @@ function runInFixtureMode() {
 	console.log(`Instantiations analyzed: ${instantiations.length}\n`);
 	console.log(rendered);
 
-	const s = summarize(branches, counts);
-	console.log(
-		`\nDirection coverage: ${s.covered}/${s.total} (${s.pct}%), unknown evaluations: ${s.unknown}`,
-	);
+	if (hasProfileCosts(counts)) {
+		console.log(`\n${PROFILE_NOTE}`);
+	} else {
+		const s = summarize(branches, counts);
+		console.log(
+			`\nDirection coverage: ${s.covered}/${s.total} (${s.pct}%), unknown evaluations: ${s.unknown}`,
+		);
+	}
 }

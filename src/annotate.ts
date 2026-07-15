@@ -1,5 +1,6 @@
 import { styleText } from "node:util";
 import ts from "typescript";
+import type { MarginalCost } from "./profile.js";
 import type { BranchPoint } from "./scanner.js";
 
 export interface BranchHitCounts {
@@ -7,6 +8,7 @@ export interface BranchHitCounts {
 	falseHits: number;
 	/** Hits where the branch outcome could not be determined (e.g. non-boolean expressions). */
 	unknownHits: number;
+	cost?: MarginalCost;
 }
 
 export interface RenderOptions {
@@ -44,6 +46,29 @@ const MUTED_STYLE: StyleFormat = "gray";
 interface PlacedMarker {
 	line: number;
 	text: string;
+}
+
+function marginalCostMarker(
+	line: number,
+	cost: MarginalCost,
+	colorize: Colorize,
+): PlacedMarker {
+	const parts = [
+		`+${cost.types.toLocaleString("en-US")} types`,
+		`+${cost.instantiations.toLocaleString("en-US")} inst`,
+	];
+	if (cost.relationChecks > 0) {
+		parts.push(`+${cost.relationChecks.toLocaleString("en-US")} rel`);
+	}
+	parts.push(`~${cost.ms.toFixed(2)}ms`);
+	return {
+		line,
+		text: colorize(MUTED_STYLE, parts.join(" · ")),
+	};
+}
+
+export function hasProfileCosts(hits: Map<string, BranchHitCounts>): boolean {
+	return [...hits.values()].some((counts) => counts.cost !== undefined);
 }
 
 function findParentBranch(
@@ -271,6 +296,7 @@ export function renderAnnotated(
 	const colorize = makeColorize(options.color ?? false);
 	const tabWidth = options.tabWidth ?? DEFAULT_TAB_WIDTH;
 	const showCounts = shouldShowCounts(options.showCounts ?? "auto", hits);
+	const profiled = hasProfileCosts(hits);
 	const rawLines = sourceText.split("\n");
 	// Expand tabs up front — every width calculation and output uses the
 	// expanded form, so padding with spaces aligns correctly in any terminal.
@@ -282,15 +308,19 @@ export function renderAnnotated(
 	const markersByLine = new Map<number, string[]>();
 	const branchesByNode = new Map(branches.map((b) => [b.node, b]));
 	for (const branch of branches) {
-		if (shouldSuppressUnreached(branch, hits, branchesByNode)) {
-			continue;
+		const counts = hits.get(branch.id);
+		let placed: PlacedMarker[];
+		if (profiled) {
+			if (!counts?.cost) {
+				continue;
+			}
+			placed = [marginalCostMarker(branch.line, counts.cost, colorize)];
+		} else {
+			if (shouldSuppressUnreached(branch, hits, branchesByNode)) {
+				continue;
+			}
+			placed = placeMarkers(branch, counts, colorize, showCounts);
 		}
-		const placed = placeMarkers(
-			branch,
-			hits.get(branch.id),
-			colorize,
-			showCounts,
-		);
 		for (const { line, text } of placed) {
 			const existing = markersByLine.get(line);
 			if (existing) {

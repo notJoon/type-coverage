@@ -3,6 +3,7 @@ export {
 	type RenderOptions,
 	renderAnnotated,
 } from "./annotate.js";
+export type { MarginalCost } from "./profile.js";
 export {
 	type BranchPoint,
 	type CoverageSummary,

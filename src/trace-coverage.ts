@@ -1,6 +1,7 @@
 import type ts from "typescript";
 import type { BranchHitCounts } from "./annotate.js";
 import type { TargetInstantiation } from "./parser.js";
+import { addMarginalCosts, type TypeCheckerProfiler } from "./profile.js";
 import type { ResolvedTargetAlias } from "./target.js";
 import {
 	type TraceResult,
@@ -44,6 +45,7 @@ export interface TraceCoverageExecutionContext {
 	target: TraceCoverageTargetContext;
 	checker: ts.TypeChecker;
 	projectRoot?: string;
+	profiler?: TypeCheckerProfiler;
 }
 
 export interface TraceCoverageHooks {
@@ -89,6 +91,8 @@ export function collectTraceCoverage(
 			options.context.target.sourceFile,
 			options.context.checker,
 			options.context.projectRoot,
+			options.context.profiler,
+			inst.cost,
 		);
 		traces.push(trace);
 
@@ -99,6 +103,11 @@ export function collectTraceCoverage(
 				counts.set(step.branchId, entry);
 			}
 			bumpCount(entry, step.taken);
+			if (step.cost) {
+				entry.cost = entry.cost
+					? addMarginalCosts(entry.cost, step.cost)
+					: step.cost;
+			}
 			if (step.taken === "unknown") {
 				unknownByReason[step.unknownReason] =
 					(unknownByReason[step.unknownReason] ?? 0) + 1;
