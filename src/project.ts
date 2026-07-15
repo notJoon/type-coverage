@@ -208,7 +208,8 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 		context.checker,
 		options.targetFilePath,
 	);
-	if (targets.length === 0) {
+	const [target] = targets;
+	if (!target) {
 		throw new ProjectRunError(
 			`Target type "${options.targetTypeName}" (conditional type alias) not found in project`,
 		);
@@ -225,7 +226,6 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 			`Target type "${options.targetTypeName}" is ambiguous across files: ${files}\nHint: provide --target-file to disambiguate.`,
 		);
 	}
-	const target = targets[0];
 	const testSourceFiles = collectProjectTestSources(
 		context,
 		options.testFilePaths,

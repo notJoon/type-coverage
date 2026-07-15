@@ -239,7 +239,9 @@ function isWide(cp: number): boolean {
 
 	while (lo <= hi) {
 		const mid = (lo + hi) >>> 1;
-		const [start, end] = WIDE_RANGES[mid];
+		const range = WIDE_RANGES[mid];
+		if (!range) return false;
+		const [start, end] = range;
 
 		if (cp < start) {
 			hi = mid - 1;
@@ -334,7 +336,9 @@ export function renderAnnotated(
 	// Compute marker column: align across all annotated lines
 	let markerCol = 0;
 	for (const lineNo of markersByLine.keys()) {
-		const w = displayWidth(sourceLines[lineNo - 1]);
+		const sourceLine = sourceLines[lineNo - 1];
+		if (sourceLine === undefined) continue;
+		const w = displayWidth(sourceLine);
 		if (w > markerCol) {
 			markerCol = w;
 		}
@@ -342,18 +346,18 @@ export function renderAnnotated(
 	markerCol += MARKER_GAP;
 
 	const out: string[] = [];
-	for (let i = 0; i < sourceLines.length; i++) {
+	for (const [i, sourceLine] of sourceLines.entries()) {
 		const lineNo = i + 1;
 		const gutter = `${String(lineNo).padStart(gutterWidth)} │ `;
 		const markers = markersByLine.get(lineNo);
 		let suffix = "";
 		if (markers) {
 			const padding = " ".repeat(
-				Math.max(0, markerCol - displayWidth(sourceLines[i])),
+				Math.max(0, markerCol - displayWidth(sourceLine)),
 			);
 			suffix = `${padding}${markers.join("  ")}`;
 		}
-		out.push(`${gutter}${sourceLines[i]}${suffix}`);
+		out.push(`${gutter}${sourceLine}${suffix}`);
 	}
 	return out.join("\n");
 }

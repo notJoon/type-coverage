@@ -5,7 +5,8 @@
 		"outDir": "../dist-tests",
 		"declaration": false,
 		"declarationMap": false,
-		"composite": false
+		"composite": false,
+		"noUncheckedIndexedAccess": false
 	},
 	"include": ["**/*.ts", "../src/**/*.ts"]
 }
