@@ -45,7 +45,7 @@ export interface TraceCoverageExecutionContext {
 	target: TraceCoverageTargetContext;
 	checker: ts.TypeChecker;
 	projectRoot?: string;
-	profiler?: TypeCheckerProfiler;
+	profiler: TypeCheckerProfiler | undefined;
 }
 
 export interface TraceCoverageHooks {

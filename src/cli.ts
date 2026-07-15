@@ -77,7 +77,7 @@ function parseCliArgs(): CliArgs {
 		project: values.project,
 		target: values.target,
 		tests: [...values.tests],
-		targetFile: values.targetFile,
+		...(values.targetFile ? { targetFile: values.targetFile } : {}),
 		profile: values.profile,
 	};
 }
@@ -102,7 +102,7 @@ function main(): void {
 		tsconfigPath: args.project,
 		targetTypeName: args.target,
 		testFilePaths: args.tests,
-		targetFilePath: args.targetFile,
+		...(args.targetFile ? { targetFilePath: args.targetFile } : {}),
 		profile: args.profile,
 		onWarn: (msg) => console.warn(`warning: ${msg}`),
 	});

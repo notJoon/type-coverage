@@ -86,7 +86,7 @@ export class ProjectRunError extends Error {}
 interface ProjectContext {
 	program: ts.Program;
 	checker: ts.TypeChecker;
-	profiler?: TypeCheckerProfiler;
+	profiler: TypeCheckerProfiler | undefined;
 	projectRoot: string;
 	warn: (message: string) => void;
 }
@@ -94,7 +94,7 @@ interface ProjectContext {
 function createProjectContext(options: {
 	tsconfigPath: string;
 	profile: boolean;
-	onWarn?: (message: string) => void;
+	onWarn: ((message: string) => void) | undefined;
 }): ProjectContext {
 	const tsconfigPath = path.resolve(options.tsconfigPath);
 	const projectRoot = path.dirname(tsconfigPath);

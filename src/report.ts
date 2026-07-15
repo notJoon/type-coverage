@@ -33,7 +33,7 @@ function renderProjectReportBody(
 	);
 	const rendered = renderAnnotated(sourceFile.text, branches, counts, {
 		color: options.color ?? false,
-		tabWidth: options.tabWidth,
+		...(options.tabWidth === undefined ? {} : { tabWidth: options.tabWidth }),
 	}).split("\n");
 	const slice = rendered.slice(startLine, endLine + 1);
 	const profiled = hasProfileCosts(counts);
