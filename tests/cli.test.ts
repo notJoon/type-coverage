@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { spawnSync } from "node:child_process";
 
 const CLI = path.resolve(import.meta.dirname, "..", "..", "dist", "cli.js");
 const RUNNER = path.resolve(
@@ -23,13 +23,7 @@ describe("CLI", () => {
 	it("profiles every instantiated fixture target in source order", () => {
 		const result = spawnSync(
 			process.execPath,
-			[
-				RUNNER,
-				"--fixture",
-				PROFILE_ALL,
-				"--all",
-				"--profile",
-			],
+			[RUNNER, "--fixture", PROFILE_ALL, "--all", "--profile"],
 			{ encoding: "utf8" },
 		);
 
@@ -59,7 +53,7 @@ describe("CLI", () => {
 		assert.equal(result.status, 0, result.stderr);
 		assert.equal(
 			result.stdout,
-			'\nFile: profile-all.ts\nTarget: First<T>\nInstantiations analyzed: 1\n\n  1 │ export type First<T> = T extends string ? true : false;    ✓T  ✗ MISS F\n\nDirection coverage: 1/2 (50%), unknown evaluations: 0\n',
+			"\nFile: profile-all.ts\nTarget: First<T>\nInstantiations analyzed: 1\n\n  1 │ export type First<T> = T extends string ? true : false;    ✓T  ✗ MISS F\n\nDirection coverage: 1/2 (50%), unknown evaluations: 0\n",
 		);
 	});
 
@@ -90,12 +84,7 @@ describe("CLI", () => {
 	});
 
 	it("preserves the missing --target diagnostic without --all", () => {
-		const result = run(
-			"--project",
-			"tsconfig.json",
-			"--tests",
-			"tests.ts",
-		);
+		const result = run("--project", "tsconfig.json", "--tests", "tests.ts");
 
 		assert.equal(result.status, 2);
 		assert.equal(

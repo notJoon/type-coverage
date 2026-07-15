@@ -64,7 +64,11 @@ type B = 2;`;
 		const out = renderAnnotated(code, branches, map);
 		assert.match(out, /✓T\(2\)/);
 		assert.match(out, /✗ MISS F/);
-		assert.doesNotMatch(out, /✗F\(0\)/, "should not show count for missed direction");
+		assert.doesNotMatch(
+			out,
+			/✗F\(0\)/,
+			"should not show count for missed direction",
+		);
 	});
 
 	it("auto mode hides counts when no branch is hit more than once", () => {

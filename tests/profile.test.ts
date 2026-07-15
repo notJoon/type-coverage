@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import { describe, it } from "node:test";
+import type ts from "typescript";
 import { runFixture, runFixtureAll } from "../src/fixture.js";
 import { createTypeCheckerProfiler } from "../src/profile.js";
-import type ts from "typescript";
 
 const FIXTURES = path.resolve(import.meta.dirname, "..", "..", "fixtures");
 
@@ -34,9 +34,7 @@ describe("type-operation profiling", () => {
 	});
 
 	it("shares first-touch checker caches across targets", () => {
-		const results = runFixtureAll(
-			path.join(FIXTURES, "profile-all-cache.ts"),
-		);
+		const results = runFixtureAll(path.join(FIXTURES, "profile-all-cache.ts"));
 		const first = results.find(
 			(result) => result.targetAlias.name.text === "First",
 		);

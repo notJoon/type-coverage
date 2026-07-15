@@ -296,11 +296,7 @@ export function replaceExpectedBlock(
 	let endIdx = startIdx + 1;
 	while (endIdx < lines.length) {
 		const l = lines[endIdx];
-		if (
-			ENTRY_RE.test(l) ||
-			CHILD_RE.test(l) ||
-			BLANK_COMMENT_RE.test(l)
-		) {
+		if (ENTRY_RE.test(l) || CHILD_RE.test(l) || BLANK_COMMENT_RE.test(l)) {
 			endIdx++;
 		} else {
 			break;

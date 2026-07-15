@@ -20,6 +20,6 @@
 		}
 	},
 	"files": {
-		"includes": ["src/**", "scripts/**", "*.json"]
+		"includes": ["src/**", "scripts/**", "tests/**", "*.json"]
 	}
 }

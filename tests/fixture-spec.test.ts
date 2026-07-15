@@ -6,8 +6,8 @@ import { runFixture } from "../src/fixture.js";
 import {
 	parseExpected,
 	replaceExpectedBlock,
-	serializeExpected,
 	type SerializableResult,
+	serializeExpected,
 } from "./fixture-spec.js";
 
 describe("parseExpected", () => {
@@ -137,7 +137,12 @@ export type Classify<X> = X extends string ? 1 : 0;`;
 
 describe("serializeExpected / replaceExpectedBlock", () => {
 	function fakeResult(
-		branches: Array<{ line: number; trueHits: number; falseHits: number; unknownHits?: number }>,
+		branches: Array<{
+			line: number;
+			trueHits: number;
+			falseHits: number;
+			unknownHits?: number;
+		}>,
 		traces: string[],
 		tests: number,
 	): SerializableResult {
@@ -377,11 +382,7 @@ describe("fixture Expected block verification", () => {
 							s.taken === "true" ? "T" : s.taken === "false" ? "F" : "U",
 						)
 						.join("");
-					assert.equal(
-						encoded,
-						expected,
-						`${file}: trace[${idx}] mismatch`,
-					);
+					assert.equal(encoded, expected, `${file}: trace[${idx}] mismatch`);
 				}
 			}
 		});

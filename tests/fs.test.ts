@@ -31,9 +31,7 @@ function makeTempProject(files: Record<string, string>): {
 	const tsconfigPath = path.join(root, "tsconfig.json");
 	const { config, error } = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
 	if (error) {
-		throw new Error(
-			ts.flattenDiagnosticMessageText(error.messageText, "\n"),
-		);
+		throw new Error(ts.flattenDiagnosticMessageText(error.messageText, "\n"));
 	}
 	const parsed = ts.parseJsonConfigFileContent(config, ts.sys, root);
 	const program = ts.createProgram(parsed.fileNames, parsed.options);
@@ -104,7 +102,10 @@ describe("collectTestSourceFiles", () => {
 		assert.deepEqual(result.warnings, [
 			"test pattern matched no files on disk: tests/nope*.ts",
 		]);
-		assert.match(result.error.message, /No test files matched --tests patterns/);
+		assert.match(
+			result.error.message,
+			/No test files matched --tests patterns/,
+		);
 	});
 
 	it("does not include files that match glob on disk but are excluded from program", () => {

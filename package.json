@@ -23,6 +23,7 @@
 		"dist/**/*.d.ts.map"
 	],
 	"scripts": {
+		"prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
 		"build": "tsc && chmod +x dist/cli.js",
 		"build:tests": "tsc -p tests/tsconfig.json",
 		"lint": "biome check .",
@@ -41,7 +42,7 @@
 		"static-analysis"
 	],
 	"author": "",
-	"license": "ISC",
+	"license": "BSD-2-Clause",
 	"packageManager": "pnpm@10.13.1",
 	"peerDependencies": {
 		"typescript": ">=5.0"
