@@ -8,6 +8,8 @@ import type { BranchPoint } from "./scanner.js";
 import {
 	collectTargetBranches,
 	findConditionalTargetInSource,
+	findConditionalTargetsInSource,
+	type ResolvedTargetAlias,
 } from "./target.js";
 import { collectTraceCoverage } from "./trace-coverage.js";
 import type { TraceResult } from "./tracer.js";
@@ -16,6 +18,8 @@ export type { BranchPoint, TargetInstantiation, TraceResult };
 
 export interface FixtureRunResult {
 	sourceFile: ts.SourceFile;
+	targetAlias: ts.TypeAliasDeclaration;
+	paramNames: string[];
 	branches: BranchPoint[];
 	instantiations: TargetInstantiation[];
 	traces: TraceResult[][];
@@ -24,6 +28,40 @@ export interface FixtureRunResult {
 
 export interface FixtureRunOptions {
 	profile?: boolean;
+}
+
+function runFixtureTarget(
+	sourceFile: ts.SourceFile,
+	checker: ts.TypeChecker,
+	target: ResolvedTargetAlias,
+	profiler: ReturnType<typeof createTypeCheckerProfiler>,
+): FixtureRunResult {
+	const branches = collectTargetBranches(target);
+	const instantiations = collectInstantiations(
+		sourceFile,
+		target.alias.name.text,
+		checker,
+		target.symbol,
+		profiler,
+	);
+	const { traces, counts } = collectTraceCoverage({
+		instantiations,
+		context: {
+			target,
+			checker,
+			profiler,
+		},
+	});
+
+	return {
+		sourceFile,
+		targetAlias: target.alias,
+		paramNames: target.paramNames,
+		branches,
+		instantiations,
+		traces,
+		counts,
+	};
 }
 
 function makeFixtureProgram(
@@ -86,24 +124,17 @@ export function runFixture(
 			`target conditional type "${targetTypeName}" not found in ${fixturePath}`,
 		);
 	}
-	const branches = collectTargetBranches(target);
 	const profiler = createTypeCheckerProfiler(checker, options.profile ?? false);
+	return runFixtureTarget(sourceFile, checker, target, profiler);
+}
 
-	const instantiations = collectInstantiations(
-		sourceFile,
-		targetTypeName,
-		checker,
-		target.symbol,
-		profiler,
-	);
-	const { traces, counts } = collectTraceCoverage({
-		instantiations,
-		context: {
-			target,
-			checker,
-			profiler,
-		},
-	});
+export function runFixtureAll(fixturePath: string): FixtureRunResult[] {
+	const absolute = path.resolve(fixturePath);
+	const code = fs.readFileSync(absolute, "utf8");
+	const { sourceFile, checker } = makeFixtureProgram(absolute, code);
+	const profiler = createTypeCheckerProfiler(checker, true);
 
-	return { sourceFile, branches, instantiations, traces, counts };
+	return findConditionalTargetsInSource(sourceFile, checker)
+		.map((target) => runFixtureTarget(sourceFile, checker, target, profiler))
+		.filter((result) => result.instantiations.length > 0);
 }

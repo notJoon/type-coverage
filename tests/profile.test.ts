@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { runFixture } from "../src/fixture.js";
+import { runFixture, runFixtureAll } from "../src/fixture.js";
 import { createTypeCheckerProfiler } from "../src/profile.js";
 import type ts from "typescript";
 
@@ -20,6 +20,38 @@ function totalCounters(cost: {
 }
 
 describe("type-operation profiling", () => {
+	it("profiles instantiated conditional aliases in source order", () => {
+		const results = runFixtureAll(path.join(FIXTURES, "profile-all.ts"));
+
+		assert.deepEqual(
+			results.map((result) => result.targetAlias.name.text),
+			["First", "Second"],
+		);
+		assert.deepEqual(
+			results.map((result) => result.instantiations.length),
+			[1, 1],
+		);
+	});
+
+	it("shares first-touch checker caches across targets", () => {
+		const results = runFixtureAll(
+			path.join(FIXTURES, "profile-all-cache.ts"),
+		);
+		const first = results.find(
+			(result) => result.targetAlias.name.text === "First",
+		);
+		const second = results.find(
+			(result) => result.targetAlias.name.text === "Second",
+		);
+		const firstCost = first?.instantiations[0]?.cost;
+		const secondCost = second?.instantiations[0]?.cost;
+
+		assert.ok(firstCost);
+		assert.ok(secondCost);
+		assert.ok(totalCounters(firstCost) > 0);
+		assert.equal(totalCounters(secondCost), 0);
+	});
+
 	it("disables profiling when the TypeScript internal counters are unavailable", () => {
 		assert.equal(
 			createTypeCheckerProfiler({} as ts.TypeChecker, true),

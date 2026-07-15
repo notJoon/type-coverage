@@ -7,10 +7,12 @@ export type { MarginalCost } from "./profile.js";
 export {
 	type BranchPoint,
 	type CoverageSummary,
+	type ProjectRunAllOptions,
 	ProjectRunError,
 	type ProjectRunOptions,
 	type ProjectRunResult,
 	runProject,
+	runProjectAll,
 	summarize,
 	type TargetInstantiation,
 	type TraceResult,
@@ -19,4 +21,5 @@ export {
 export {
 	type RenderProjectReportOptions,
 	renderProjectReport,
+	renderProjectReports,
 } from "./report.js";

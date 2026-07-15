@@ -3,11 +3,16 @@ import ts from "typescript";
 import type { BranchHitCounts } from "./annotate.js";
 import { collectTestSourceFiles } from "./fs.js";
 import { collectInstantiations, type TargetInstantiation } from "./parser.js";
-import { createTypeCheckerProfiler } from "./profile.js";
+import {
+	createTypeCheckerProfiler,
+	type TypeCheckerProfiler,
+} from "./profile.js";
 import type { BranchPoint } from "./scanner.js";
 import {
 	collectTargetBranches,
+	findConditionalTargetsInFile,
 	findConditionalTargetsInProgram,
+	type ResolvedTargetAlias,
 } from "./target.js";
 import { collectTraceCoverage } from "./trace-coverage.js";
 import type { TraceResult, UnknownReason } from "./tracer.js";
@@ -22,6 +27,14 @@ export interface ProjectRunOptions {
 	/** Called with a short human-readable message when a recoverable issue occurs. */
 	onWarn?: (message: string) => void;
 	profile?: boolean;
+}
+
+export interface ProjectRunAllOptions {
+	tsconfigPath: string;
+	testFilePaths: string[];
+	targetFilePath: string;
+	/** Called with a short human-readable message when a recoverable issue occurs. */
+	onWarn?: (message: string) => void;
 }
 
 export interface CoverageSummary {
@@ -70,17 +83,22 @@ export function summarize(
 
 export class ProjectRunError extends Error {}
 
-/**
- * Run the scanner + instantiation-parser + tracer pipeline against a real
- * TypeScript project. The target conditional type is located across all
- * non-declaration source files in the program; instantiations are collected
- * from the named test file.
- */
-export function runProject(options: ProjectRunOptions): ProjectRunResult {
+interface ProjectContext {
+	program: ts.Program;
+	checker: ts.TypeChecker;
+	profiler?: TypeCheckerProfiler;
+	projectRoot: string;
+	warn: (message: string) => void;
+}
+
+function createProjectContext(options: {
+	tsconfigPath: string;
+	profile: boolean;
+	onWarn?: (message: string) => void;
+}): ProjectContext {
 	const tsconfigPath = path.resolve(options.tsconfigPath);
 	const projectRoot = path.dirname(tsconfigPath);
 	const warn = options.onWarn ?? (() => {});
-
 	const { config, error } = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
 	if (error) {
 		throw new ProjectRunError(
@@ -92,73 +110,65 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 		ts.sys,
 		projectRoot,
 	);
-
 	const program = ts.createProgram(fileNames, compilerOptions);
 	const checker = program.getTypeChecker();
-	const profiler = createTypeCheckerProfiler(checker, options.profile ?? false);
-
-	const targets = findConditionalTargetsInProgram(
+	return {
 		program,
-		options.targetTypeName,
 		checker,
-		options.targetFilePath,
-	);
-	if (targets.length === 0) {
-		throw new ProjectRunError(
-			`Target type "${options.targetTypeName}" (conditional type alias) not found in project`,
-		);
-	}
-	if (targets.length > 1) {
-		const files = [
-			...new Set(
-				targets.map((t) => path.relative(projectRoot, t.sourceFile.fileName)),
-			),
-		].join(", ");
-		throw new ProjectRunError(
-			`Target type "${options.targetTypeName}" is ambiguous across files: ${files}\nHint: provide --target-file to disambiguate.`,
-		);
-	}
-	const target = targets[0];
-
-	const testSourceCollection = collectTestSourceFiles(
-		program,
-		options.testFilePaths,
+		profiler: createTypeCheckerProfiler(checker, options.profile),
 		projectRoot,
+		warn,
+	};
+}
+
+function collectProjectTestSources(
+	context: ProjectContext,
+	testFilePaths: string[],
+): ts.SourceFile[] {
+	const collection = collectTestSourceFiles(
+		context.program,
+		testFilePaths,
+		context.projectRoot,
 	);
-	for (const message of testSourceCollection.warnings) {
-		warn(message);
+	for (const message of collection.warnings) {
+		context.warn(message);
 	}
-	if (!testSourceCollection.ok) {
-		throw new ProjectRunError(testSourceCollection.error.message);
+	if (!collection.ok) {
+		throw new ProjectRunError(collection.error.message);
 	}
-	const testSourceFiles = testSourceCollection.sourceFiles;
+	return collection.sourceFiles;
+}
 
-	const branches = collectTargetBranches(target, projectRoot);
-
+function runProjectTarget(
+	target: ResolvedTargetAlias,
+	testSourceFiles: ts.SourceFile[],
+	context: ProjectContext,
+): ProjectRunResult {
+	const targetTypeName = target.alias.name.text;
+	const branches = collectTargetBranches(target, context.projectRoot);
 	const instantiations: TargetInstantiation[] = [];
 	for (const testSourceFile of testSourceFiles) {
 		instantiations.push(
 			...collectInstantiations(
 				testSourceFile,
-				options.targetTypeName,
-				checker,
+				targetTypeName,
+				context.checker,
 				target.symbol,
-				profiler,
+				context.profiler,
 			),
 		);
 	}
-
 	const { traces, counts, unknownByReason } = collectTraceCoverage({
 		instantiations,
 		context: {
 			target,
-			checker,
-			projectRoot,
-			profiler,
+			checker: context.checker,
+			projectRoot: context.projectRoot,
+			profiler: context.profiler,
 		},
 		hooks: {
 			onArityMismatch: (inst, expectedTypeArgs) => {
-				warn(
+				context.warn(
 					`instantiation \`${inst.name}\` at L${inst.line} expects ${expectedTypeArgs} type argument(s), got ${inst.typeArgs.length}`,
 				);
 			},
@@ -175,6 +185,72 @@ export function runProject(options: ProjectRunOptions): ProjectRunResult {
 		traces,
 		counts,
 		summary: summarize(branches, counts, unknownByReason),
-		projectRoot,
+		projectRoot: context.projectRoot,
 	};
+}
+
+/**
+ * Run the scanner + instantiation-parser + tracer pipeline against a real
+ * TypeScript project. The target conditional type is located across all
+ * non-declaration source files in the program; instantiations are collected
+ * from the named test file.
+ */
+export function runProject(options: ProjectRunOptions): ProjectRunResult {
+	const context = createProjectContext({
+		tsconfigPath: options.tsconfigPath,
+		profile: options.profile ?? false,
+		onWarn: options.onWarn,
+	});
+
+	const targets = findConditionalTargetsInProgram(
+		context.program,
+		options.targetTypeName,
+		context.checker,
+		options.targetFilePath,
+	);
+	if (targets.length === 0) {
+		throw new ProjectRunError(
+			`Target type "${options.targetTypeName}" (conditional type alias) not found in project`,
+		);
+	}
+	if (targets.length > 1) {
+		const files = [
+			...new Set(
+				targets.map((t) =>
+					path.relative(context.projectRoot, t.sourceFile.fileName),
+				),
+			),
+		].join(", ");
+		throw new ProjectRunError(
+			`Target type "${options.targetTypeName}" is ambiguous across files: ${files}\nHint: provide --target-file to disambiguate.`,
+		);
+	}
+	const target = targets[0];
+	const testSourceFiles = collectProjectTestSources(
+		context,
+		options.testFilePaths,
+	);
+	return runProjectTarget(target, testSourceFiles, context);
+}
+
+export function runProjectAll(
+	options: ProjectRunAllOptions,
+): ProjectRunResult[] {
+	const context = createProjectContext({
+		tsconfigPath: options.tsconfigPath,
+		profile: true,
+		onWarn: options.onWarn,
+	});
+	const targets = findConditionalTargetsInFile(
+		context.program,
+		context.checker,
+		options.targetFilePath,
+	);
+	const testSourceFiles = collectProjectTestSources(
+		context,
+		options.testFilePaths,
+	);
+	return targets
+		.map((target) => runProjectTarget(target, testSourceFiles, context))
+		.filter((result) => result.instantiations.length > 0);
 }

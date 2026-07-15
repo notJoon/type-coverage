@@ -36,14 +36,14 @@ function resolveTargetAlias(
 
 function collectTargetsInSourceFile(
 	sourceFile: ts.SourceFile,
-	name: string,
 	checker: ts.TypeChecker,
+	name?: string,
 ): ResolvedTargetAlias[] {
 	const targets: ResolvedTargetAlias[] = [];
 	for (const node of sourceFile.statements) {
 		if (
 			ts.isTypeAliasDeclaration(node) &&
-			node.name.text === name &&
+			(name === undefined || node.name.text === name) &&
 			ts.isConditionalTypeNode(node.type)
 		) {
 			const resolved = resolveTargetAlias(node, node.type, sourceFile, checker);
@@ -76,10 +76,22 @@ export function findConditionalTargetsInProgram(
 		) {
 			continue;
 		}
-		matches.push(...collectTargetsInSourceFile(sourceFile, name, checker));
+		matches.push(...collectTargetsInSourceFile(sourceFile, checker, name));
 	}
 
 	return matches;
+}
+
+export function findConditionalTargetsInFile(
+	program: ts.Program,
+	checker: ts.TypeChecker,
+	targetFilePath: string,
+): ResolvedTargetAlias[] {
+	const normalizedTargetFile = path.resolve(targetFilePath);
+	const sourceFile = program
+		.getSourceFiles()
+		.find((file) => path.resolve(file.fileName) === normalizedTargetFile);
+	return sourceFile ? collectTargetsInSourceFile(sourceFile, checker) : [];
 }
 
 export function findConditionalTargetInSource(
@@ -87,8 +99,15 @@ export function findConditionalTargetInSource(
 	name: string,
 	checker: ts.TypeChecker,
 ): ResolvedTargetAlias | undefined {
-	const matches = collectTargetsInSourceFile(sourceFile, name, checker);
+	const matches = collectTargetsInSourceFile(sourceFile, checker, name);
 	return matches[0];
+}
+
+export function findConditionalTargetsInSource(
+	sourceFile: ts.SourceFile,
+	checker: ts.TypeChecker,
+): ResolvedTargetAlias[] {
+	return collectTargetsInSourceFile(sourceFile, checker);
 }
 
 export function collectTargetBranches(

@@ -8,15 +8,11 @@ export interface RenderProjectReportOptions {
 	tabWidth?: number;
 }
 
-/**
- * Render a human-readable text report for a ProjectRunResult — a header,
- * the target alias source sliced and annotated with per-branch hit markers,
- * and a coverage summary line.
- */
-export function renderProjectReport(
+function renderProjectReportBody(
 	result: ProjectRunResult,
 	targetName: string,
-	options: RenderProjectReportOptions = {},
+	options: RenderProjectReportOptions,
+	includeProfileNote: boolean,
 ): string {
 	const {
 		sourceFile,
@@ -51,7 +47,9 @@ export function renderProjectReport(
 		slice.join("\n"),
 	];
 	if (profiled) {
-		lines.push("", PROFILE_NOTE);
+		if (includeProfileNote) {
+			lines.push("", PROFILE_NOTE);
+		}
 		return lines.join("\n");
 	}
 	lines.push(
@@ -64,4 +62,35 @@ export function renderProjectReport(
 		lines.push(`Unknown reasons: ${parts.join(", ")}`);
 	}
 	return lines.join("\n");
+}
+
+/**
+ * Render a human-readable text report for a ProjectRunResult — a header,
+ * the target alias source sliced and annotated with per-branch hit markers,
+ * and a coverage summary line.
+ */
+export function renderProjectReport(
+	result: ProjectRunResult,
+	targetName: string,
+	options: RenderProjectReportOptions = {},
+): string {
+	return renderProjectReportBody(result, targetName, options, true);
+}
+
+export function renderProjectReports(
+	results: ProjectRunResult[],
+	options: RenderProjectReportOptions = {},
+): string {
+	const reports = results.map((result) =>
+		renderProjectReportBody(
+			result,
+			result.targetAlias.name.text,
+			options,
+			false,
+		),
+	);
+	if (results.some((result) => hasProfileCosts(result.counts))) {
+		reports.push("", PROFILE_NOTE);
+	}
+	return reports.join("\n");
 }

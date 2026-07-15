@@ -17,10 +17,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { hasProfileCosts, renderAnnotated } from "../dist/annotate.js";
-import { runFixture } from "../dist/fixture.js";
+import { runFixture, runFixtureAll } from "../dist/fixture.js";
 import { PROFILE_NOTE } from "../dist/profile.js";
-import { runProject, summarize } from "../dist/project.js";
-import { renderProjectReport } from "../dist/report.js";
+import { runProject, runProjectAll, summarize } from "../dist/project.js";
+import { renderProjectReport, renderProjectReports } from "../dist/report.js";
 import {
 	replaceExpectedBlock,
 	serializeExpected,
@@ -30,6 +30,7 @@ const { values } = parseArgs({
 	options: {
 		project: { type: "string", short: "p" },
 		target: { type: "string", short: "t" },
+		all: { type: "boolean", default: false },
 		tests: { type: "string", multiple: true },
 		"target-file": { type: "string" },
 		fixture: { type: "string", short: "f" },
@@ -44,8 +45,23 @@ const tabWidth = values["tab-width"]
 	? Number.parseInt(values["tab-width"], 10)
 	: undefined;
 
-if (!values.target) {
+if (values.target && values.all) {
+	console.error("Provide exactly one of --target and --all");
+	process.exit(2);
+}
+
+if (!values.target && !values.all) {
 	console.error("Missing required --target <TypeName>");
+	process.exit(2);
+}
+
+if (values.all && !values.profile) {
+	console.error("--all requires --profile");
+	process.exit(2);
+}
+
+if (values.all && values["update-test"]) {
+	console.error("--all cannot be combined with --update-test");
 	process.exit(2);
 }
 
@@ -63,9 +79,26 @@ if (!values.project || !values.tests) {
 	process.exit(2);
 }
 
+if (values.all && !values["target-file"]) {
+	console.error("Project --all requires --target-file");
+	process.exit(2);
+}
+
 runInProjectMode();
 
 function runInProjectMode() {
+	if (values.all) {
+		const results = runProjectAll({
+			tsconfigPath: values.project,
+			testFilePaths: values.tests,
+			targetFilePath: values["target-file"],
+			onWarn: (msg) => console.warn(`warning: ${msg}`),
+		});
+		console.log(
+			renderProjectReports(results, { color: values.color, tabWidth }),
+		);
+		return;
+	}
 	const result = runProject({
 		tsconfigPath: values.project,
 		targetTypeName: values.target,
@@ -84,6 +117,32 @@ function runInProjectMode() {
 
 function runInFixtureMode() {
 	const fixturePath = path.resolve(values.fixture);
+	if (values.all) {
+		const results = runFixtureAll(fixturePath);
+		for (const result of results) {
+			const target = result.targetAlias.name.text;
+			const rendered = renderAnnotated(
+				result.sourceFile.text,
+				result.branches,
+				result.counts,
+				{ color: values.color, tabWidth },
+			);
+			console.log(`\nFixture: ${path.relative(process.cwd(), fixturePath)}`);
+			console.log(`Target: ${target}`);
+			console.log(`Instantiations analyzed: ${result.instantiations.length}\n`);
+			console.log(rendered);
+			if (!hasProfileCosts(result.counts)) {
+				const s = summarize(result.branches, result.counts);
+				console.log(
+					`\nDirection coverage: ${s.covered}/${s.total} (${s.pct}%), unknown evaluations: ${s.unknown}`,
+				);
+			}
+		}
+		if (results.some((result) => hasProfileCosts(result.counts))) {
+			console.log(`\n${PROFILE_NOTE}`);
+		}
+		return;
+	}
 	const result = runFixture(fixturePath, values.target, {
 		profile: values.profile,
 	});

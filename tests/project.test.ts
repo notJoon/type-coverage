@@ -3,8 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, it } from "node:test";
-import { ProjectRunError, runProject } from "../src/project.js";
-import { renderProjectReport } from "../src/report.js";
+import { ProjectRunError, runProject, runProjectAll } from "../src/project.js";
+import { renderProjectReport, renderProjectReports } from "../src/report.js";
 
 const tempDirs: string[] = [];
 
@@ -29,6 +29,45 @@ function makeTempProject(files: Record<string, string>): {
 }
 
 describe("runProject", () => {
+	it("profiles instantiated aliases only from targetFilePath in source order", () => {
+		const { root, tsconfigPath } = makeTempProject({
+			"tsconfig.json": JSON.stringify({
+				compilerOptions: { strict: true, noLib: true },
+				include: ["src/**/*.ts", "tests/**/*.ts"],
+			}),
+			"src/types.ts": `
+export type First<T> = T extends string ? 1 : 0;
+export type Unused<T> = T extends boolean ? 1 : 0;
+export type Second<T> = T extends number ? 1 : 0;
+`,
+			"src/other.ts": `export type Other<T> = T extends bigint ? 1 : 0;`,
+			"tests/a.test.ts": `
+import type { First, Second } from "../src/types";
+import type { Other } from "../src/other";
+type _first = First<"x">;
+type _second = Second<42>;
+type _other = Other<1n>;
+`,
+		});
+
+		const results = runProjectAll({
+			tsconfigPath,
+			targetFilePath: path.join(root, "src", "types.ts"),
+			testFilePaths: [path.join(root, "tests", "a.test.ts")],
+		});
+
+		assert.deepEqual(
+			results.map((result) => result.targetAlias.name.text),
+			["First", "Second"],
+		);
+		const report = renderProjectReports(results);
+		assert.match(report, /Target: First<T>/);
+		assert.match(report, /Target: Second<T>/);
+		assert.match(report, /\+[\d,]+ types · \+[\d,]+ inst · ~[\d.]+ms/);
+		assert.doesNotMatch(report, /✓|MISS|Direction coverage/);
+		assert.equal(report.match(/first-touch marginal/g)?.length, 1);
+	});
+
 	it("renders a cost-only report in profile mode", () => {
 		const { root, tsconfigPath } = makeTempProject({
 			"tsconfig.json": JSON.stringify({
