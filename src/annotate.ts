@@ -67,7 +67,9 @@ function marginalCostMarker(
 	};
 }
 
-export function hasProfileCosts(hits: Map<string, BranchHitCounts>): boolean {
+export function hasProfileCosts(
+	hits: ReadonlyMap<string, BranchHitCounts>,
+): boolean {
 	return [...hits.values()].some((counts) => counts.cost !== undefined);
 }
 
@@ -108,7 +110,7 @@ function hasMissedDirectionMarkerOnLine(
 
 function shouldSuppressUnreached(
 	branch: BranchPoint,
-	counts: Map<string, BranchHitCounts>,
+	counts: ReadonlyMap<string, BranchHitCounts>,
 	branchesByNode: Map<ts.Node, BranchPoint>,
 ): boolean {
 	if (counts.has(branch.id)) {
@@ -181,7 +183,7 @@ function placeMarkers(
 
 function shouldShowCounts(
 	mode: NonNullable<RenderOptions["showCounts"]>,
-	hits: Map<string, BranchHitCounts>,
+	hits: ReadonlyMap<string, BranchHitCounts>,
 ): boolean {
 	if (mode === "always") return true;
 	if (mode === "never") return false;
@@ -291,8 +293,8 @@ function expandTabs(line: string, tabWidth: number): string {
 
 export function renderAnnotated(
 	sourceText: string,
-	branches: BranchPoint[],
-	hits: Map<string, BranchHitCounts>,
+	branches: readonly BranchPoint[],
+	hits: ReadonlyMap<string, BranchHitCounts>,
 	options: RenderOptions = {},
 ): string {
 	const colorize = makeColorize(options.color ?? false);

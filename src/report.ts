@@ -78,7 +78,7 @@ export function renderProjectReport(
 }
 
 export function renderProjectReports(
-	results: ProjectRunResult[],
+	results: readonly ProjectRunResult[],
 	options: RenderProjectReportOptions = {},
 ): string {
 	const reports = results.map((result) =>

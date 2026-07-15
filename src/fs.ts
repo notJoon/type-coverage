@@ -118,7 +118,7 @@ function matchProgramFilesByGlob(
 
 export function collectTestSourceFiles(
 	program: ts.Program,
-	testFilePaths: string[],
+	testFilePaths: readonly string[],
 	projectRoot: string,
 ): TestSourceFileCollectionResult {
 	const projectRootAbs = path.resolve(projectRoot);

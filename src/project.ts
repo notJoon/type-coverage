@@ -22,7 +22,7 @@ export type { BranchPoint, TargetInstantiation, TraceResult, UnknownReason };
 export interface ProjectRunOptions {
 	tsconfigPath: string;
 	targetTypeName: string;
-	testFilePaths: string[];
+	testFilePaths: readonly string[];
 	targetFilePath?: string;
 	/** Called with a short human-readable message when a recoverable issue occurs. */
 	onWarn?: (message: string) => void;
@@ -31,7 +31,7 @@ export interface ProjectRunOptions {
 
 export interface ProjectRunAllOptions {
 	tsconfigPath: string;
-	testFilePaths: string[];
+	testFilePaths: readonly string[];
 	targetFilePath: string;
 	/** Called with a short human-readable message when a recoverable issue occurs. */
 	onWarn?: (message: string) => void;
@@ -59,8 +59,8 @@ export interface ProjectRunResult {
 }
 
 export function summarize(
-	branches: BranchPoint[],
-	counts: Map<string, BranchHitCounts>,
+	branches: readonly BranchPoint[],
+	counts: ReadonlyMap<string, BranchHitCounts>,
 	unknownByReason: Partial<Record<UnknownReason, number>> = {},
 ): CoverageSummary {
 	let total = 0;
@@ -123,7 +123,7 @@ function createProjectContext(options: {
 
 function collectProjectTestSources(
 	context: ProjectContext,
-	testFilePaths: string[],
+	testFilePaths: readonly string[],
 ): ts.SourceFile[] {
 	const collection = collectTestSourceFiles(
 		context.program,
