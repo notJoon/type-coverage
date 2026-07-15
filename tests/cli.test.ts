@@ -81,6 +81,14 @@ describe("CLI", () => {
 		assert.match(result.stderr, /exactly one of --target and --all/i);
 	});
 
+	it("reports invalid options without a stack trace", () => {
+		const result = run("--targte", "Example");
+
+		assert.equal(result.status, 2);
+		assert.match(result.stderr, /Unexpected option or argument: "--targte"/);
+		assert.doesNotMatch(result.stderr, /TypeError|at parseCliArgs|Node\.js/);
+	});
+
 	it("preserves the missing --target diagnostic without --all", () => {
 		const result = run(
 			"--project",
@@ -105,6 +113,18 @@ describe("CLI", () => {
 
 		assert.equal(result.status, 2);
 		assert.equal(result.stderr, "Missing required --target <TypeName>\n");
+	});
+
+	it("preserves the fixture runner missing --tests diagnostic", () => {
+		const result = spawnSync(
+			process.execPath,
+			[RUNNER, "--project", "tsconfig.json", "--target", "Example"],
+			{ encoding: "utf8" },
+		);
+
+		assert.equal(result.status, 2);
+		assert.match(result.stderr, /^Usage:/);
+		assert.doesNotMatch(result.stderr, /at runProject|Node\.js/);
 	});
 
 	it("reports an invalid fixture target without a stack trace", () => {

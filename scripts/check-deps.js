@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
 const deps = pkg.dependencies ?? {};
+const unexpected = Object.keys(deps).filter((name) => name !== "@optique/core");
 
-if (Object.keys(deps).length > 0) {
+if (unexpected.length > 0) {
 	console.error(
-		`Error: runtime dependencies must be empty, found: ${JSON.stringify(deps)}`,
+		`Error: unexpected runtime dependencies found: ${unexpected.join(", ")}`,
 	);
 	process.exit(1);
 }
 
-console.log("✓ Zero runtime dependencies");
+console.log("✓ Runtime dependencies are limited to @optique/core");

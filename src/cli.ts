@@ -4,7 +4,12 @@
 // test file; delegates to runProject() and renders an annotated source slice.
 // Fixture mode is intentionally excluded — use scripts/run.mjs for that.
 
-import { parseArgs } from "node:util";
+import { object } from "@optique/core/constructs";
+import { formatMessage } from "@optique/core/message";
+import { multiple, optional } from "@optique/core/modifiers";
+import { parse } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
 import { ProjectRunError, runProject, runProjectAll } from "./project.js";
 import { renderProjectReport, renderProjectReports } from "./report.js";
 
@@ -12,6 +17,15 @@ const USAGE =
 	"Usage: type-coverage --project <tsconfig.json> --target <TypeName> --tests <file-or-glob> [--tests <file-or-glob>] [--target-file <source-file.ts>] [--profile]";
 
 class UsageError extends Error {}
+
+const cliParser = object({
+	project: optional(option("-p", "--project", string())),
+	target: optional(option("-t", "--target", string())),
+	all: option("--all"),
+	tests: multiple(option("--tests", string())),
+	targetFile: optional(option("--target-file", string())),
+	profile: option("--profile"),
+});
 
 interface CommonCliArgs {
 	project: string;
@@ -30,34 +44,29 @@ type CliArgs = CommonCliArgs &
 	);
 
 function parseCliArgs(): CliArgs {
-	const { values } = parseArgs({
-		options: {
-			project: { type: "string", short: "p" },
-			target: { type: "string", short: "t" },
-			all: { type: "boolean", default: false },
-			tests: { type: "string", multiple: true },
-			"target-file": { type: "string" },
-			profile: { type: "boolean", default: false },
-		},
-	});
+	const parsed = parse(cliParser, process.argv.slice(2));
+	if (!parsed.success) {
+		throw new UsageError(formatMessage(parsed.error));
+	}
+	const values = parsed.value;
 	if (values.target && values.all) {
 		throw new UsageError("Provide exactly one of --target and --all");
 	}
 	if (values.all && !values.profile) {
 		throw new UsageError("--all requires --profile");
 	}
-	if (!values.project || !values.tests) {
+	if (!values.project || values.tests.length === 0) {
 		throw new UsageError(USAGE);
 	}
 	if (values.all) {
-		if (!values["target-file"]) {
+		if (!values.targetFile) {
 			throw new UsageError("Project --all requires --target-file");
 		}
 		return {
 			mode: "all",
 			project: values.project,
-			tests: values.tests,
-			targetFile: values["target-file"],
+			tests: [...values.tests],
+			targetFile: values.targetFile,
 		};
 	}
 	if (!values.target) {
@@ -67,8 +76,8 @@ function parseCliArgs(): CliArgs {
 		mode: "target",
 		project: values.project,
 		target: values.target,
-		tests: values.tests,
-		targetFile: values["target-file"],
+		tests: [...values.tests],
+		targetFile: values.targetFile,
 		profile: values.profile,
 	};
 }

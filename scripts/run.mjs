@@ -15,7 +15,12 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { parseArgs } from "node:util";
+import { object } from "@optique/core/constructs";
+import { formatMessage } from "@optique/core/message";
+import { multiple, optional, withDefault } from "@optique/core/modifiers";
+import { parse } from "@optique/core/parser";
+import { flag, option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
 import { hasProfileCosts, renderAnnotated } from "../dist/annotate.js";
 import { FixtureRunError, runFixture, runFixtureAll } from "../dist/fixture.js";
 import { PROFILE_NOTE } from "../dist/profile.js";
@@ -26,24 +31,26 @@ import {
 	serializeExpected,
 } from "../dist-tests/tests/fixture-spec.js";
 
-const { values } = parseArgs({
-	options: {
-		project: { type: "string", short: "p" },
-		target: { type: "string", short: "t" },
-		all: { type: "boolean", default: false },
-		tests: { type: "string", multiple: true },
-		"target-file": { type: "string" },
-		fixture: { type: "string", short: "f" },
-		color: { type: "boolean", default: true },
-		"tab-width": { type: "string" },
-		"update-test": { type: "boolean", default: false },
-		profile: { type: "boolean", default: false },
-	},
+const cliParser = object({
+	project: optional(option("-p", "--project", string())),
+	target: optional(option("-t", "--target", string())),
+	all: option("--all"),
+	tests: multiple(option("--tests", string())),
+	"target-file": optional(option("--target-file", string())),
+	fixture: optional(option("-f", "--fixture", string())),
+	color: withDefault(flag("--color"), true),
+	"tab-width": optional(option("--tab-width", integer())),
+	"update-test": option("--update-test"),
+	profile: option("--profile"),
 });
 
-const tabWidth = values["tab-width"]
-	? Number.parseInt(values["tab-width"], 10)
-	: undefined;
+const parsed = parse(cliParser, process.argv.slice(2));
+if (!parsed.success) {
+	console.error(formatMessage(parsed.error));
+	process.exit(2);
+}
+const values = parsed.value;
+const tabWidth = values["tab-width"];
 
 if (values.target && values.all) {
 	console.error("Provide exactly one of --target and --all");
@@ -78,7 +85,7 @@ if (values.fixture) {
 	process.exit(0);
 }
 
-if (!values.project || !values.tests) {
+if (!values.project || values.tests.length === 0) {
 	console.error(
 		"Usage:\n" +
 			"  Project: --project <tsconfig.json> --target <TypeName> --tests <file-or-glob> [--tests <file-or-glob>] [--target-file <source-file.ts>] [--profile]\n" +

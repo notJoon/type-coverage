@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@optique/core':
+        specifier: ^1.1.1
+        version: 1.1.1
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.4.11
@@ -73,6 +77,10 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@optique/core@1.1.1':
+    resolution: {integrity: sha512-tbZLdH5wEnh8IRG8KTmWPZCKHLmD4bXigoPdzoSUVi+V46qZTNEaTdqtR7EuEwhbPI0KQjLSYRZCxFTdr9OZkA==}
+    engines: {bun: '>=1.2.0', deno: '>=2.3.0', node: '>=20.0.0'}
+
   '@types/node@25.6.0':
     resolution: {integrity: sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==}
 
@@ -120,6 +128,8 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.4.11':
     optional: true
+
+  '@optique/core@1.1.1': {}
 
   '@types/node@25.6.0':
     dependencies:

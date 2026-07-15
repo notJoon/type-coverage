@@ -36,5 +36,5 @@ jobs:
       - name: Test
         run: pnpm run test
 
-      - name: Check zero dependencies
+      - name: Check runtime dependencies
         run: pnpm run check-deps
