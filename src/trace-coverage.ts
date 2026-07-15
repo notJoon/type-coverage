@@ -14,12 +14,20 @@ function emptyCounts(): BranchHitCounts {
 }
 
 function bumpCount(counts: BranchHitCounts, taken: TraceResult["taken"]): void {
-	if (taken === "true") {
-		counts.trueHits++;
-	} else if (taken === "false") {
-		counts.falseHits++;
-	} else {
-		counts.unknownHits++;
+	switch (taken) {
+		case "true":
+			counts.trueHits++;
+			break;
+		case "false":
+			counts.falseHits++;
+			break;
+		case "unknown":
+			counts.unknownHits++;
+			break;
+		default: {
+			const exhaustive: never = taken;
+			throw new Error(`Unexpected branch outcome: ${exhaustive}`);
+		}
 	}
 }
 

@@ -37,21 +37,27 @@ export function createTypeCheckerProfiler(
 	}
 
 	const internal = checker as unknown as ProfilingChecker;
+	const { getTypeCount, getInstantiationCount, getRelationCacheSizes } =
+		internal;
 	if (
-		typeof internal.getTypeCount !== "function" ||
-		typeof internal.getInstantiationCount !== "function" ||
-		typeof internal.getRelationCacheSizes !== "function"
+		typeof getTypeCount !== "function" ||
+		typeof getInstantiationCount !== "function" ||
+		typeof getRelationCacheSizes !== "function"
 	) {
 		return undefined;
 	}
+	const readTypeCount = getTypeCount.bind(checker);
+	const readInstantiationCount = getInstantiationCount.bind(checker);
+	const readRelationCacheSizes = getRelationCacheSizes.bind(checker);
 
 	function snapshot(): Snapshot {
 		return {
-			types: internal.getTypeCount?.call(checker) ?? 0,
-			instantiations: internal.getInstantiationCount?.call(checker) ?? 0,
-			relationChecks: Object.values(
-				internal.getRelationCacheSizes?.call(checker) ?? {},
-			).reduce((sum, size) => sum + size, 0),
+			types: readTypeCount(),
+			instantiations: readInstantiationCount(),
+			relationChecks: Object.values(readRelationCacheSizes()).reduce(
+				(sum, size) => sum + size,
+				0,
+			),
 		};
 	}
 

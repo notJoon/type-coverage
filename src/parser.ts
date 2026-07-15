@@ -66,11 +66,12 @@ export function collectInstantiations(
 		}
 
 		for (const ref of refs) {
-			if (!ref.typeArguments) {
+			const typeArguments = ref.typeArguments;
+			if (!typeArguments) {
 				continue;
 			}
 			const resolveTypeArgs = () =>
-				ref.typeArguments?.map((arg) => checker.getTypeFromTypeNode(arg)) ?? [];
+				typeArguments.map((arg) => checker.getTypeFromTypeNode(arg));
 			const measured = profiler?.(resolveTypeArgs);
 			const typeArgs = measured?.value ?? resolveTypeArgs();
 			const line =
