@@ -16,6 +16,8 @@ import type { TraceResult } from "./tracer.js";
 
 export type { BranchPoint, TargetInstantiation, TraceResult };
 
+export class FixtureRunError extends Error {}
+
 export interface FixtureRunResult {
 	sourceFile: ts.SourceFile;
 	targetAlias: ts.TypeAliasDeclaration;
@@ -120,8 +122,11 @@ export function runFixture(
 		checker,
 	);
 	if (!target) {
-		throw new Error(
-			`target conditional type "${targetTypeName}" not found in ${fixturePath}`,
+		const available = findConditionalTargetsInSource(sourceFile, checker)
+			.map((candidate) => candidate.alias.name.text)
+			.join(", ");
+		throw new FixtureRunError(
+			`Target "${targetTypeName}" is not a top-level conditional type in ${fixturePath}.\n${available ? `Available targets: ${available}` : "No top-level conditional types found."}`,
 		);
 	}
 	const profiler = createTypeCheckerProfiler(checker, options.profile ?? false);

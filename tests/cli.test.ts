@@ -13,6 +13,7 @@ const RUNNER = path.resolve(
 );
 const FIXTURES = path.resolve(import.meta.dirname, "..", "..", "fixtures");
 const PROFILE_ALL = path.join(FIXTURES, "profile-all.ts");
+const PROFILE_EXPENSIVE = path.join(FIXTURES, "profile-expensive.ts");
 
 function run(...args: string[]) {
 	return spawnSync(process.execPath, [CLI, ...args], { encoding: "utf8" });
@@ -104,6 +105,29 @@ describe("CLI", () => {
 
 		assert.equal(result.status, 2);
 		assert.equal(result.stderr, "Missing required --target <TypeName>\n");
+	});
+
+	it("reports an invalid fixture target without a stack trace", () => {
+		const result = spawnSync(
+			process.execPath,
+			[
+				RUNNER,
+				"--fixture",
+				PROFILE_EXPENSIVE,
+				"--target",
+				"_expensive",
+				"--profile",
+			],
+			{ encoding: "utf8" },
+		);
+
+		assert.equal(result.status, 1);
+		assert.match(
+			result.stderr,
+			/Target "_expensive" is not a top-level conditional type/,
+		);
+		assert.match(result.stderr, /Available targets: BuildTuple, IsBig/);
+		assert.doesNotMatch(result.stderr, /at runFixture|Node\.js/);
 	});
 
 	it("requires --profile with --all", () => {

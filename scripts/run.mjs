@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { hasProfileCosts, renderAnnotated } from "../dist/annotate.js";
-import { runFixture, runFixtureAll } from "../dist/fixture.js";
+import { FixtureRunError, runFixture, runFixtureAll } from "../dist/fixture.js";
 import { PROFILE_NOTE } from "../dist/profile.js";
 import { runProject, runProjectAll, summarize } from "../dist/project.js";
 import { renderProjectReport, renderProjectReports } from "../dist/report.js";
@@ -66,7 +66,15 @@ if (values.all && values["update-test"]) {
 }
 
 if (values.fixture) {
-	runInFixtureMode();
+	try {
+		runInFixtureMode();
+	} catch (error) {
+		if (error instanceof FixtureRunError) {
+			console.error(error.message);
+			process.exit(1);
+		}
+		throw error;
+	}
 	process.exit(0);
 }
 
