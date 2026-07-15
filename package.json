@@ -3,6 +3,9 @@
 	"version": "0.1.0",
 	"description": "Type-level branch coverage for TypeScript conditional types",
 	"type": "module",
+	"engines": {
+		"node": ">=20.12"
+	},
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"bin": {
